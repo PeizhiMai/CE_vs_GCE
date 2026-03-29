@@ -1,0 +1,9 @@
+[submodule "external/CanEnsAFQMC"]
+	path = external/CanEnsAFQMC
+	url = https://github.com/TongSericus/CanEnsAFQMC.git
+[submodule "external/SwapQMC"]
+	path = external/SwapQMC
+	url = https://github.com/TongSericus/SwapQMC
+[submodule "external/papers-code-CanEnsAFQMC"]
+	path = external/papers-code-CanEnsAFQMC
+	url = https://github.com/TongSericus/papers-code-CanEnsAFQMC.git

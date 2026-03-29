@@ -1,0 +1,2 @@
+beta	kinetic_per_particle	kinetic_stderr	potential_per_particle	potential_stderr	total_per_particle	total_stderr	time_slices	nsamples	batches
+3.6	-1.0698094234716942	0.006004883866966309	1.0640796954398581	0.0017575000559798778	-0.005729728031836293	0.004743174848847237	36.0	256.0	1.0

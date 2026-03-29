@@ -1,0 +1,12 @@
+model = "non-interacting tight-binding"
+geometry = "2D square-lattice disk"
+boundary = "open"
+radius = 3.0
+t = 1.0
+mu = 0.0
+nsites = 29
+xmin = -3
+xmax = 3
+ymin = -3
+ymax = 3
+inclusion_rule = "x^2 + y^2 <= R^2 with integer lattice sites"

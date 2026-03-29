@@ -1,0 +1,4 @@
+.DS_Store
+.julia_depot/
+.juliaup/
+.mplconfig/

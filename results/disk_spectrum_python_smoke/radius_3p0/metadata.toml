@@ -1,0 +1,10 @@
+model = "non-interacting tight-binding"
+geometry = "2D square-lattice disk"
+boundary = "open"
+inclusion_rule = "x^2 + y^2 <= R^2 with integer lattice sites"
+radius = 3.0
+hopping = 1.0
+mu = 0.0
+nsites = 29
+lowest_eigenvalue = -3.4982929195611754
+highest_eigenvalue = 3.4982929195611754

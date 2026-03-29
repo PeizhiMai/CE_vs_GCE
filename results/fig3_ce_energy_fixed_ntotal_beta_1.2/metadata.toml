@@ -1,0 +1,34 @@
+target = "Fixed-total-N CE energy assembled from spin-resolved sectors"
+beta_list = [1.2]
+
+[particles]
+ntotal = 36
+
+[lattice]
+lx = 6
+ly = 6
+
+[model]
+u = 4.0
+dtau = 0.1
+
+[run]
+stderr_target = 0.003
+max_batches = 2
+batch_nsamples = 64
+max_workers = 1
+unique_spin_sectors = ["0+36", "1+35", "2+34", "3+33", "4+32", "5+31", "6+30", "7+29", "8+28", "9+27", "10+26", "11+25", "12+24", "13+23", "14+22", "15+21", "16+20", "17+19", "18+18"]
+
+[notes]
+beta0_energy = "E_sector(0) = U * nup * ndn / V"
+weight_reconstruction = "log Z_sector(beta) = log Z_sector(0) - integral_0^beta E_sector(beta') dbeta' using trapezoidal integration"
+stderr_caveat = "fixed-N stderr only propagates sector energy stderrs at fixed reconstructed weights"
+z0_reference = "log Z_sector(0) from binomial state counts C(V,nup)C(V,ndn)"
+
+[qmc]
+measure_interval = 2
+cluster_size = 4
+lowrank_threshold = 1.0e-10
+num_fourier_points = 15
+nwarmups = 64
+stab_interval = 10
