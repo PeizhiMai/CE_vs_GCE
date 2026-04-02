@@ -17,7 +17,7 @@ import numpy as np
 from disk_spectrum import build_disk_hamiltonian, single_particle_spectrum
 
 
-DEFAULT_OUT_DIR = ROOT / "results" / "spinless_disk_energy_r4_to_r20_step2"
+DEFAULT_OUT_DIR = ROOT / "results" / "spinless_disk_comparison_by_radius"
 
 
 def parse_beta_grid(text: str) -> list[float]:
@@ -130,27 +130,29 @@ def make_radius_plot(
     radius: float,
     nsites: int,
     canonical_n: int,
-    betas: list[float],
+    temperatures: np.ndarray,
     energy_gc: list[float],
     energy_ce: list[float],
 ) -> None:
+    order = np.argsort(temperatures)
     fig, ax = plt.subplots(figsize=(7.0, 4.5), dpi=180)
-    ax.plot(betas, energy_gc, color="#1b9e77", linewidth=2.0, label="GCE")
-    ax.plot(betas, energy_ce, color="#d95f02", linewidth=2.0, linestyle="--", label="CE")
-    ax.set_xlabel(r"$\beta$")
-    ax.set_ylabel("Energy per particle")
-    ax.set_title(f"Spinless Disk Energy, R={int(radius) if float(radius).is_integer() else radius}")
+    ax.plot(temperatures[order], np.asarray(energy_gc)[order], color="#1b9e77", linewidth=2.0, label="GCE")
+    ax.plot(temperatures[order], np.asarray(energy_ce)[order], color="#d95f02", linewidth=2.0, linestyle="--", label="CE")
+    ax.set_xlabel(r"$T = 1/\beta$", fontsize=22)
+    ax.set_ylabel("Energy per particle", fontsize=22)
+    ax.set_title(f"Spinless Disk Energy vs T, R={int(radius) if float(radius).is_integer() else radius}", fontsize=24)
     ax.grid(True, alpha=0.25)
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, fontsize=18)
+    ax.tick_params(labelsize=18)
     note = f"V={nsites}, N={canonical_n}, GCE tuned to <N>={canonical_n}"
     ax.text(
-        0.02,
+        0.5,
         0.98,
         note,
         transform=ax.transAxes,
-        ha="left",
+        ha="center",
         va="top",
-        fontsize=9,
+        fontsize=18,
         bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.8},
     )
     fig.tight_layout()
@@ -224,13 +226,13 @@ def solve_radius(radius: float, beta_grid: list[float], out_dir: Path) -> tuple[
         ],
         rows,
     )
-    write_metadata(radius_dir / "metadata.toml", radius, nsites, canonical_n, beta_grid)
+    write_metadata(radius_dir / "energy_metadata.toml", radius, nsites, canonical_n, beta_grid)
     make_radius_plot(
-        radius_dir / "energy_vs_beta.png",
+        radius_dir / "energy_vs_temperature.png",
         radius=radius,
         nsites=nsites,
         canonical_n=canonical_n,
-        betas=beta_grid,
+        temperatures=1.0 / np.asarray(beta_grid, dtype=float),
         energy_gc=gc_curve,
         energy_ce=ce_curve,
     )
