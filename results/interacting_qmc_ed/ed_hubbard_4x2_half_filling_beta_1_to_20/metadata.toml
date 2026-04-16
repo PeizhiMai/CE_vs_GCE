@@ -1,0 +1,27 @@
+ensemble = "fixed Nup and Ndn exact diagonalization"
+model = "spinful Hubbard"
+beta_list = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
+boundary = "periodic"
+
+[spectrum]
+ground_state_energy = -5.954236681057269
+max_energy = 21.95423668105729
+
+[particles]
+ntotal = 8
+ndn = 4
+nup = 4
+
+[lattice]
+nsites = 8
+lx = 4
+ly = 2
+
+[hilbert_space]
+nbasis_dn = 70
+dimension = 4900
+nbasis_up = 70
+
+[hamiltonian]
+t = 1.0
+u = 4.0

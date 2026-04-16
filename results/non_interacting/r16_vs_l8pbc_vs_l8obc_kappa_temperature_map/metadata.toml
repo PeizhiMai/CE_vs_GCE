@@ -1,0 +1,8 @@
+comparison = "Equal-compressibility temperature map"
+disk_radius = 16
+square_L = 8
+num_interpolation_points = 1500
+panels = "disk_gce_to_square_gce, disk_gce_to_square_ce, disk_ce_to_square_gce, disk_ce_to_square_ce"
+square_curves = "square_obc, square_pbc"
+method = "log-temperature interpolation of kappa(T), then inverse interpolation T(kappa)"
+data_sources = "results/spinless_disk_comparison_by_radius/radius_16/thermo_vs_beta.tsv, results/spinless_square_pbc_comparison_by_L/L_8/square_pbc_thermo_vs_beta.tsv, results/spinless_square_obc_comparison_by_L/L_8/square_obc_thermo_vs_beta.tsv"

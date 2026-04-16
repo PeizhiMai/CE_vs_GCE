@@ -1,0 +1,12 @@
+model = "spinless non-interacting tight-binding"
+geometry = "LxL square lattice"
+boundary = "periodic"
+filling = "half-filling"
+compressibility_definition_ce = "kappa = 1 / (V * (F(N+1)-2F(N)+F(N-1)))"
+compressibility_definition_gce = "kappa = beta/V * (<N^2>-<N>^2) = dn/dmu"
+entropy_definition_ce = "S/N = (E-F)/(T N)"
+entropy_definition_gce = "S/N = (E-Omega-mu N)/(T N)"
+L = 64
+nsites = 4096
+canonical_n = 2048
+beta_grid = "1.0,2.0,3.0"
