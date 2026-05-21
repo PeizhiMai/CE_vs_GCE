@@ -25,3 +25,26 @@
 
 - Following the conclusion that the relevant setup is fixed `(Nup, Ndn)` with `Nup = Ndn`, I still cannot reproduce the result in Fig. 3.
 - Next step: ask Tong for help clarifying the remaining discrepancy.
+
+## 2026-03-31
+
+- I now have the summary of the CE versus GCE behavior in the non-interacting system on the circular lattice.
+
+## 2026-04-01
+
+- As discussed with Steve, I started calculating the non-interacting system on square lattices with both periodic boundary conditions (PBC) and open boundary conditions (OBC).
+
+## 2026-04-06
+
+- I have now finished the non-interacting square-lattice calculations for both boundary conditions at `L = 4, 8, 16, 32`.
+
+## 2026-04-16
+
+- I finished the summary comparing the non-interacting system across disk, square PBC, and square OBC geometries.
+- I also finished the exact-diagonalization benchmark of the canonical-ensemble QMC energy versus `beta` on the `4x2` cluster.
+- Next phase: move on to the attractive Hubbard model.
+
+## 2026-05-21
+
+- I set up SMOQYDQMC on CADES to properly use MPI and checkpointing for grand-canonical-ensemble checks of the superconducting transition in the attractive-`U` Hubbard model.
+- I am now running the calculation to obtain results for `U = -5`.

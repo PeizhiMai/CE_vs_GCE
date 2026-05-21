@@ -379,3 +379,94 @@ This smoke result is only a pipeline check because it used very small per-sector
 ### Paper interpretation caveat
 
 The fixed-total-`N` reconstruction path remains in this repo for comparison work, but it is not the primary interpretation being used for the current Fig. 3 reproduction target.
+
+## SmoQyDQMC attractive Hubbard workflow
+
+`SmoQyDQMC` is installed in the local Julia environment and an attractive square-lattice Hubbard driver is available at:
+
+- [scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard.jl](/Users/cosdis/Desktop/projects/CE_GCE/scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard.jl)
+
+This driver is adapted from the official SmoQyDQMC square-Hubbard tutorial, but uses a density-channel Hirsch HS transformation, which is real for `U <= 0`, and rejects positive `U` values.
+
+Command-line arguments are positional:
+
+```text
+sID U tprime mu L beta N_therm N_measurements N_bins N_updates [ph_sym_form] [output_dir]
+```
+
+Smoke-test example:
+
+```bash
+./scripts/run_julia_local.sh --project=julia_env \
+  scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard.jl \
+  0 -4.0 0.0 0.0 4 0.2 1 2 2 1 true \
+  results/interacting_qmc_ed/smoqydqmc_attractive_hubbard_smoke
+```
+
+Production-style starting point:
+
+```bash
+./scripts/run_julia_local.sh --project=julia_env \
+  scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard.jl \
+  0 -4.0 0.0 0.0 8 4.0 2000 2000 40 5 true
+```
+
+Default outputs are written under:
+
+- `results/interacting_qmc_ed/smoqydqmc_attractive_hubbard/`
+
+Key output files inside each run folder include `model_summary.toml`, `simulation_info_sID-*_pID-0.toml`, `global_stats_pID-0.csv`, `local_stats_pID-0.csv`, and `stats_pID-0.h5`.
+
+### Superfluid-density current-current measurement
+
+The SmoQyDQMC attractive-Hubbard drivers now initialize the x-current/current correlation needed for the finite-size superfluid density:
+
+- Standard driver: `scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard.jl`
+- Checkpoint driver: `scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard_checkpoint.jl`
+
+Implementation convention:
+
+- `HOPPING_ID = 1` is the `+x` nearest-neighbor hopping because `t_bonds = [bond_px, bond_py, bond_pxpy, bond_pxny]`.
+- The measured SmoQyDQMC correlation is `correlation = "current"`, `integrated = true`, `pairs = [(1, 1)]`.
+- The relevant output file is `integrated/current/current_momentum_integrated_stats*.csv` inside each run folder.
+- Momentum indices follow SmoQyDQMC conventions: `(K_1,K_2)=(1,0)` means `q=(2π/L,0)` and `(0,1)` means `q=(0,2π/L)`.
+
+Post-process a completed run with:
+
+```bash
+~/.venvs/myenv/bin/python scripts/interacting_qmc_ed/compute_smoqydqmc_superfluid_density.py \
+  results/interacting_qmc_ed/<run_parent>/<run_folder>
+```
+
+This writes `superfluid_density.tsv` in the run folder with:
+
+- `lambda_longitudinal_qmin0 = Lambda_xx(2π/L,0,0)`
+- `lambda_transverse_0qmin = Lambda_xx(0,2π/L,0)`
+- `rho_s_current = 0.25 * (lambda_longitudinal_qmin0 - lambda_transverse_0qmin)`
+- `rho_s_diamagnetic = 0.25 * ((-K_x/N) - lambda_transverse_0qmin)` as a useful check using `local_stats` hopping energy for `HOPPING_ID=1`.
+
+The current-current measurement and normalization follow the notes in `docs/dqmc_superfluid_density_implementation.md` and the SmoQyDQMC correlation-output convention that correlation functions are reported per unit cell/site and momentum labels are integer `K_d` values.
+
+### ED superfluid-density check
+
+The grand-canonical ED checker also computes the same finite-size current response for small clusters:
+
+- `scripts/interacting_qmc_ed/ed_hubbard_gce_check.jl`
+
+It sums all `(N_up,N_dn)` sectors, diagonalizes each sector, evaluates the Lehmann representation of the integrated current-current response, and writes the same quantities to `summary.tsv`:
+
+- `lambda_longitudinal_qmin0`
+- `lambda_transverse_0qmin`
+- `rho_s_current`
+- `diamagnetic_minus_Kx_per_site`
+- `rho_s_diamagnetic`
+
+Example:
+
+```bash
+./scripts/run_julia_local.sh --project=julia_env \
+  scripts/interacting_qmc_ed/ed_hubbard_gce_check.jl \
+  --lx=4 --ly=2 --t=1.0 --tprime=0.0 --u=-5.0 --mu=-1.0 --beta=10.0 \
+  --ph-sym-form=true \
+  --outdir=results/interacting_qmc_ed/ed_gce_hubbard_4x2_t1_tp0_Um5_mu_m1_beta10_phtrue_rhos
+```
