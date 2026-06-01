@@ -1494,3 +1494,60 @@ a `~2.6x` reduction in the current-response part relative to two separate fast
 calls.  Relative to the original Fourier/inverse implementation, the full
 `lambda_L + lambda_T` current-response cost has fallen from roughly `206 s` to
 roughly `1.5 s` for this timing case.
+
+### 3x3 ED-benchmark big reruns after batched BKT-current optimization (2026-06-01)
+
+After the batched fixed-`N` current-response optimization was synced to CADES,
+the two previous production-size 3x3 ED-benchmark jobs were cloned with new
+output directories and submitted again.  These jobs still measure the one-particle
+`G(r,τ)`/`G(k,τ)` benchmark plus equal-time/BKT observables; only the BKT/current
+measurement path has changed.
+
+```text
+dtau = 0.1 job id: 5393117
+job name: ce_bkt3x3_d01_bfast100k
+script: /home/9pm/nUHubbard/scripts/interacting_qmc_ed/job_ce_gktau_bkt_3x3_um5_beta10_dtau01_mpi32_batchfast_20260601_cades.sbatch
+output: /home/9pm/nUHubbard/runs/ce_gktau_bkt_3x3_um5_beta10_dtau01_MPI32_BATCHFAST_Ntherm10000_Nmeas100000perrank_seed20260601
+comparison G: /home/9pm/nUHubbard/runs/compare_ce_gktau_bkt_3x3_um5_dtau01_MPI32_BATCHFAST_100000perrank_vs_full_ed
+comparison BKT: /home/9pm/nUHubbard/runs/compare_ce_bkt_3x3_um5_dtau01_MPI32_BATCHFAST_100000perrank_vs_full_ed.tsv
+settings: 32 MPI ranks, 10000 warmup/rank, 100000 measurements/rank, walltime 16h
+
+dtau = 0.05 job id: 5393118
+job name: ce_bkt3x3_d005_bfast30k
+script: /home/9pm/nUHubbard/scripts/interacting_qmc_ed/job_ce_gktau_bkt_3x3_um5_beta10_dtau005_mpi64_batchfast_20260601_cades.sbatch
+output: /home/9pm/nUHubbard/runs/ce_gktau_bkt_3x3_um5_beta10_dtau005_MPI64_BATCHFAST_Ntherm5000_Nmeas30000perrank_seed20260601
+comparison G: /home/9pm/nUHubbard/runs/compare_ce_gktau_bkt_3x3_um5_dtau005_MPI64_BATCHFAST_30000perrank_vs_full_ed
+comparison BKT: /home/9pm/nUHubbard/runs/compare_ce_bkt_3x3_um5_dtau005_MPI64_BATCHFAST_30000perrank_vs_full_ed.tsv
+settings: 64 MPI ranks, 5000 warmup/rank, 30000 measurements/rank, walltime 10h
+```
+
+Initial Slurm state after submission: both jobs were pending with reason
+`Priority`.
+
+### Pre-batched-current-response QMC result archive (2026-06-01)
+
+Before using the new `BATCHFAST` 3x3 reruns for timing/benchmark comparisons,
+the previous production-size `CURRENTFIX` QMC outputs were copied into an explicit
+CADES archive:
+
+```text
+/home/9pm/nUHubbard/runs/archive_pre_batchfast_currentfix_3x3_20260601
+```
+
+The archive contains the original QMC output directories, G/BKT comparison
+outputs, the two Slurm scripts used for the pre-batched jobs, Slurm logs when
+available, a `README.txt`, `file_listing.txt`, and `sha256_selected.txt`.
+
+Archived pre-batched result roots:
+
+```text
+runs/ce_gktau_bkt_3x3_um5_beta10_dtau01_MPI32_CURRENTFIX_Ntherm10000_Nmeas100000perrank_seed20260530
+runs/compare_ce_gktau_bkt_3x3_um5_dtau01_MPI32_CURRENTFIX_100000perrank_vs_full_ed
+runs/compare_ce_bkt_3x3_um5_dtau01_MPI32_CURRENTFIX_100000perrank_vs_full_ed.tsv
+runs/ce_gktau_bkt_3x3_um5_beta10_dtau005_MPI64_CURRENTFIX_Ntherm5000_Nmeas30000perrank_seed20260530
+runs/compare_ce_gktau_bkt_3x3_um5_dtau005_MPI64_CURRENTFIX_30000perrank_vs_full_ed
+runs/compare_ce_bkt_3x3_um5_dtau005_MPI64_CURRENTFIX_30000perrank_vs_full_ed.tsv
+```
+
+The new `BATCHFAST` reruns use separate output roots with `seed20260601`, so they
+will not overwrite the archived pre-batched results.
