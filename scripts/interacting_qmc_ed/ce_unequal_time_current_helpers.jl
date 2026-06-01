@@ -1004,6 +1004,58 @@ function measure_projected_slice!(
     return nothing
 end
 
+function propagate_displaced_greens_step!(
+    Gττ::AbstractMatrix{ComplexF64},
+    Gτ0::AbstractMatrix{ComplexF64},
+    G0τ::AbstractMatrix{ComplexF64},
+    G00::AbstractMatrix{ComplexF64},
+    B::AbstractMatrix,
+    B⁻¹::AbstractMatrix{ComplexF64},
+    Icomplex::AbstractMatrix{ComplexF64},
+    tmp::AbstractMatrix{ComplexF64},
+    slice_l::Int,
+)
+    # Advance from slice_l-1 to slice_l, where slice_l is one-based in Bseq.
+    mul!(tmp, B, Gττ)
+    mul!(Gττ, tmp, B⁻¹)
+
+    if slice_l == 1
+        # The τ=0 equal-time discontinuity uses Gτ0(0)=I-G and G0τ(0)=-G,
+        # while the l>0 formula starts from
+        # Gτ0(1)=B_1 G and G0τ(1)=-(I-G)B_1^{-1}.
+        mul!(Gτ0, B, G00)
+        @. tmp = G00 - Icomplex
+        mul!(G0τ, tmp, B⁻¹)
+    else
+        mul!(tmp, B, Gτ0)
+        copyto!(Gτ0, tmp)
+        mul!(tmp, G0τ, B⁻¹)
+        copyto!(G0τ, tmp)
+    end
+    return nothing
+end
+
+function max_displaced_green_error(
+    Aττ::AbstractMatrix{ComplexF64},
+    Aτ0::AbstractMatrix{ComplexF64},
+    A0τ::AbstractMatrix{ComplexF64},
+    Bττ::AbstractMatrix{ComplexF64},
+    Bτ0::AbstractMatrix{ComplexF64},
+    B0τ::AbstractMatrix{ComplexF64},
+)
+    err = 0.0
+    @inbounds for idx in eachindex(Aττ, Bττ)
+        err = max(err, abs(Aττ[idx] - Bττ[idx]))
+    end
+    @inbounds for idx in eachindex(Aτ0, Bτ0)
+        err = max(err, abs(Aτ0[idx] - Bτ0[idx]))
+    end
+    @inbounds for idx in eachindex(A0τ, B0τ)
+        err = max(err, abs(A0τ[idx] - B0τ[idx]))
+    end
+    return err
+end
+
 function canonical_same_spin_current_responses_propagated(
     system,
     ρ::DensityMatrix,
@@ -1096,6 +1148,161 @@ function canonical_same_spin_current_responses_propagated(
     return (responses=responses, jτ_q=jτ_q, j0_m=j0_m)
 end
 
+function canonical_same_spin_current_responses_propagated_adaptive(
+    system,
+    ρ::DensityMatrix,
+    Bseq::Vector{<:AbstractMatrix},
+    prefix::Vector{<:LDR},
+    suffix::Vector{<:LDR},
+    momenta::AbstractVector{<:Tuple{Float64,Float64}};
+    refresh_interval::Int=10,
+    refresh_tol::Float64=1e-7,
+    refresh_min::Int=1,
+    refresh_max::Int=max(refresh_interval, refresh_min),
+    refresh_growth_patience::Int=3,
+)
+    V = system.V
+    L = system.L
+    Nft = ρ.Nft
+    Δτ = system.β / system.L
+    nq = length(momenta)
+    refresh_interval < 1 && error("adaptive refresh_interval must be positive")
+    refresh_min < 1 && error("adaptive refresh_min must be positive")
+    refresh_max < refresh_min && error("adaptive refresh_max must be >= refresh_min")
+    refresh_tol <= 0 && error("adaptive refresh_tol must be positive")
+    refresh_growth_patience < 1 && error("adaptive refresh_growth_patience must be positive")
+
+    Icomplex = Matrix{ComplexF64}(I, V, V)
+    ws = ldr_workspace(Icomplex)
+    tmp = similar(Icomplex)
+    full_scaled = ldr(Icomplex)
+    suffix_scaled = ldr(Icomplex)
+
+    Gττ = zeros(ComplexF64, V, V)
+    G00 = zeros(ComplexF64, V, V)
+    Gτ0 = zeros(ComplexF64, V, V)
+    G0τ = zeros(ComplexF64, V, V)
+
+    cand_Gττ = zeros(ComplexF64, V, V)
+    cand_Gτ0 = zeros(ComplexF64, V, V)
+    cand_G0τ = zeros(ComplexF64, V, V)
+    stable_Gττ = zeros(ComplexF64, V, V)
+    stable_G00 = zeros(ComplexF64, V, V)
+    stable_Gτ0 = zeros(ComplexF64, V, V)
+    stable_G0τ = zeros(ComplexF64, V, V)
+
+    Binv = [inv(Matrix{ComplexF64}(B)) for B in Bseq]
+    Jq = [ce_current_operator_x_entries(system, qx=qx, qy=qy) for (qx, qy) in momenta]
+    Jm = [ce_current_operator_x_entries(system, qx=-qx, qy=-qy) for (qx, qy) in momenta]
+    responses = zeros(ComplexF64, nq)
+    jτ_q = zeros(ComplexF64, L, nq)
+    j0_m = zeros(ComplexF64, L, nq)
+    response_m = zeros(ComplexF64, nq)
+
+    initial_interval = clamp(refresh_interval, refresh_min, refresh_max)
+    full = prefix[end]
+    @inbounds for m in 1:Nft
+        z = ComplexF64(ρ.expiφμ[m])
+        w = ComplexF64(ρ.Z̃ₘ[m]) / Nft
+        fill!(response_m, 0)
+
+        scale_factorization!(full_scaled, full, z, ws, tmp)
+        inv_IpA!(Gττ, full_scaled, ws)
+        copyto!(G00, Gττ)
+        copyto!(Gτ0, Icomplex)
+        @. Gτ0 = Gτ0 - Gττ
+        @. G0τ = -Gττ
+        measure_projected_slice!(
+            response_m, jτ_q, j0_m, 1,
+            system, Jq, Jm, Gττ, G00, Gτ0, G0τ, w,
+        )
+
+        current_l = 0
+        current_interval = initial_interval
+        safe_streak = 0
+        while current_l < L - 1
+            remaining = L - 1 - current_l
+            h = min(current_interval, remaining)
+            accepted = false
+            endpoint = current_l + h
+            err = Inf
+
+            while !accepted
+                endpoint = current_l + h
+                copyto!(cand_Gττ, Gττ)
+                copyto!(cand_Gτ0, Gτ0)
+                copyto!(cand_G0τ, G0τ)
+                for slice_l in (current_l + 1):endpoint
+                    propagate_displaced_greens_step!(
+                        cand_Gττ, cand_Gτ0, cand_G0τ, G00,
+                        Bseq[slice_l], Binv[slice_l], Icomplex, tmp, slice_l,
+                    )
+                end
+
+                refresh_projected_displaced_greens!(
+                    stable_Gττ, stable_G00, stable_Gτ0, stable_G0τ,
+                    suffix_scaled, prefix[endpoint + 1], suffix[endpoint + 1], z, ws, tmp,
+                )
+                err = max_displaced_green_error(
+                    cand_Gττ, cand_Gτ0, cand_G0τ,
+                    stable_Gττ, stable_Gτ0, stable_G0τ,
+                )
+                if err <= refresh_tol || h <= refresh_min
+                    accepted = true
+                else
+                    current_interval = max(refresh_min, max(1, h ÷ 2))
+                    h = min(current_interval, remaining)
+                    safe_streak = 0
+                end
+            end
+
+            # Accept this segment.  Re-play only the cheap propagated steps for
+            # interior slices, then measure the segment endpoint with the stable
+            # LDR refresh already computed above.  If h==1 no propagated slice is
+            # ever measured after a failed stability test.
+            copyto!(cand_Gττ, Gττ)
+            copyto!(cand_Gτ0, Gτ0)
+            copyto!(cand_G0τ, G0τ)
+            if h > 1
+                for slice_l in (current_l + 1):(endpoint - 1)
+                    propagate_displaced_greens_step!(
+                        cand_Gττ, cand_Gτ0, cand_G0τ, G00,
+                        Bseq[slice_l], Binv[slice_l], Icomplex, tmp, slice_l,
+                    )
+                    measure_projected_slice!(
+                        response_m, jτ_q, j0_m, slice_l + 1,
+                        system, Jq, Jm, cand_Gττ, G00, cand_Gτ0, cand_G0τ, w,
+                    )
+                end
+            end
+            measure_projected_slice!(
+                response_m, jτ_q, j0_m, endpoint + 1,
+                system, Jq, Jm, stable_Gττ, stable_G00, stable_Gτ0, stable_G0τ, w,
+            )
+
+            copyto!(Gττ, stable_Gττ)
+            copyto!(G00, stable_G00)
+            copyto!(Gτ0, stable_Gτ0)
+            copyto!(G0τ, stable_G0τ)
+            current_l = endpoint
+
+            if err < refresh_tol / 10 && current_interval < refresh_max
+                safe_streak += 1
+                if safe_streak >= refresh_growth_patience
+                    current_interval = min(refresh_max, current_interval + 1)
+                    safe_streak = 0
+                end
+            else
+                safe_streak = 0
+            end
+        end
+
+        @. responses += Δτ * w * response_m
+    end
+
+    return (responses=responses, jτ_q=jτ_q, j0_m=j0_m)
+end
+
 function measure_current_responses_unequaltime(
     system,
     ρup::DensityMatrix,
@@ -1137,15 +1344,39 @@ function measure_current_responses_unequaltime_propagated(
     suffix_dn::Vector{<:LDR},
     momenta::AbstractVector{<:Tuple{Float64,Float64}};
     refresh_interval::Int=10,
+    adaptive_refresh::Bool=false,
+    refresh_tol::Float64=1e-7,
+    refresh_min::Int=1,
+    refresh_max::Int=max(refresh_interval, refresh_min),
+    refresh_growth_patience::Int=3,
 )
-    up = canonical_same_spin_current_responses_propagated(
-        system, ρup, Bup, prefix_up, suffix_up, momenta,
-        refresh_interval=refresh_interval,
-    )
-    dn = canonical_same_spin_current_responses_propagated(
-        system, ρdn, Bdn, prefix_dn, suffix_dn, momenta,
-        refresh_interval=refresh_interval,
-    )
+    if adaptive_refresh
+        up = canonical_same_spin_current_responses_propagated_adaptive(
+            system, ρup, Bup, prefix_up, suffix_up, momenta;
+            refresh_interval=refresh_interval,
+            refresh_tol=refresh_tol,
+            refresh_min=refresh_min,
+            refresh_max=refresh_max,
+            refresh_growth_patience=refresh_growth_patience,
+        )
+        dn = canonical_same_spin_current_responses_propagated_adaptive(
+            system, ρdn, Bdn, prefix_dn, suffix_dn, momenta;
+            refresh_interval=refresh_interval,
+            refresh_tol=refresh_tol,
+            refresh_min=refresh_min,
+            refresh_max=refresh_max,
+            refresh_growth_patience=refresh_growth_patience,
+        )
+    else
+        up = canonical_same_spin_current_responses_propagated(
+            system, ρup, Bup, prefix_up, suffix_up, momenta,
+            refresh_interval=refresh_interval,
+        )
+        dn = canonical_same_spin_current_responses_propagated(
+            system, ρdn, Bdn, prefix_dn, suffix_dn, momenta,
+            refresh_interval=refresh_interval,
+        )
+    end
     Δτ = system.β / system.L
     nq = length(momenta)
     out = zeros(ComplexF64, nq)

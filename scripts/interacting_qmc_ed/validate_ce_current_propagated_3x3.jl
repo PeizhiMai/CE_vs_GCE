@@ -7,7 +7,14 @@ using CanEnsAFQMC
 
 include(joinpath(@__DIR__, "ce_unequal_time_current_helpers.jl"))
 
-function compare_projected_and_propagated(; refresh_interval::Int, tolerance::Float64)
+function compare_projected_and_propagated(;
+    refresh_interval::Int,
+    tolerance::Float64,
+    adaptive_refresh::Bool=false,
+    refresh_tol::Float64=1e-7,
+    refresh_min::Int=1,
+    refresh_max::Int=max(refresh_interval, refresh_min),
+)
     lx, ly = 3, 3
     beta, dtau = 10.0, 0.1
     nup, ndn = 4, 4
@@ -81,16 +88,22 @@ function compare_projected_and_propagated(; refresh_interval::Int, tolerance::Fl
             suffix_dn,
             momenta;
             refresh_interval=refresh_interval,
+            adaptive_refresh=adaptive_refresh,
+            refresh_tol=refresh_tol,
+            refresh_min=refresh_min,
+            refresh_max=refresh_max,
         )
     end
 
     labels = ("longitudinal", "transverse")
     maxdiff = 0.0
+    mode = adaptive_refresh ? "adaptive" : "fixed"
     for iq in eachindex(momenta)
         diff = abs(real(projected[iq]) - real(propagated[iq]))
         maxdiff = max(maxdiff, diff)
         @printf(
-            "refresh=%3d %-12s projected=% .15e propagated=% .15e absdiff=%.3e\n",
+            "%-8s refresh=%3d %-12s projected=% .15e propagated=% .15e absdiff=%.3e\n",
+            mode,
             refresh_interval,
             labels[iq],
             real(projected[iq]),
@@ -99,23 +112,33 @@ function compare_projected_and_propagated(; refresh_interval::Int, tolerance::Fl
         )
     end
     @printf(
-        "refresh=%3d timing projected=%.3fs propagated=%.3fs speedup=%.2fx\n",
+        "%-8s refresh=%3d timing projected=%.3fs propagated=%.3fs speedup=%.2fx\n",
+        mode,
         refresh_interval,
         projected_time,
         propagated_time,
         projected_time / propagated_time,
     )
-    maxdiff <= tolerance || error("propagated current estimator mismatch: refresh=$refresh_interval maxdiff=$maxdiff tolerance=$tolerance")
+    maxdiff <= tolerance || error("propagated current estimator mismatch: mode=$mode refresh=$refresh_interval maxdiff=$maxdiff tolerance=$tolerance")
     return maxdiff
 end
 
 function main()
     exact_refresh_diff = compare_projected_and_propagated(refresh_interval=1, tolerance=1e-8)
     production_refresh_diff = compare_projected_and_propagated(refresh_interval=10, tolerance=1e-6)
+    adaptive_refresh_diff = compare_projected_and_propagated(
+        refresh_interval=10,
+        tolerance=1e-6,
+        adaptive_refresh=true,
+        refresh_tol=1e-7,
+        refresh_min=1,
+        refresh_max=20,
+    )
     @printf(
-        "PASS: propagated current estimator agrees with stable projection; maxdiff(refresh=1)=%.3e maxdiff(refresh=10)=%.3e\n",
+        "PASS: propagated current estimator agrees with stable projection; maxdiff(refresh=1)=%.3e maxdiff(refresh=10)=%.3e maxdiff(adaptive)=%.3e\n",
         exact_refresh_diff,
         production_refresh_diff,
+        adaptive_refresh_diff,
     )
 end
 

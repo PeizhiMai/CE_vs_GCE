@@ -1667,3 +1667,75 @@ An MPI passthrough smoke test with two independent ranks and
 `--measure-greens=false` completed as well, confirming that the MPI wrapper
 accepts and forwards the propagated-estimator options.  These are smoke checks
 only; no new large 3x3 rerun has been submitted yet after this optimization.
+
+### Adaptive refresh for propagated current estimator (2026-06-01)
+
+The propagated BKT current estimator now also supports a SmoQyDQMC-like adaptive
+refresh mode.  This is still a canonical Fourier-projection estimator; the
+adaptive part only chooses how frequently to fall back to the stable LDR
+displaced-Green reconstruction while measuring the current response.
+
+CLI options:
+
+```text
+--bkt-adaptive-refresh=true
+--bkt-refresh-tol=1e-7
+--bkt-refresh-min=1
+--bkt-refresh-max=20
+--bkt-refresh-growth-patience=3
+```
+
+The recommended lower bound is `--bkt-refresh-min=1`, so that the adaptive
+logic can always fall back to measuring a rejected segment endpoint from the
+stable LDR reconstruction without using any unstable propagated intermediate
+slice.
+
+Algorithm:
+
+1. Start from an exactly refreshed stable slice.
+2. Try a candidate propagation segment of length `h`.
+3. At the candidate endpoint, compute the stable LDR displaced Green functions
+   and compare the propagated endpoint to the stable endpoint using the maximum
+   absolute matrix-element error over `G(τ,τ)`, `G(τ,0)`, and `G(0,τ)`.
+4. If the error exceeds `--bkt-refresh-tol`, reject that segment, halve `h`,
+   and retry from the previous stable slice.  No rejected propagated slice is
+   accumulated into the observable.
+5. If the segment is accepted, accumulate propagated intermediate slices and
+   measure the segment endpoint with the stable refreshed Green functions.
+6. After several very safe segments, increase the attempted interval slowly up
+   to `--bkt-refresh-max`; after failed segments, decrease it down to
+   `--bkt-refresh-min`.
+
+This is deliberately rollback-safe: if a candidate segment fails the stability
+test, the code replays the segment at a shorter interval before adding those
+slice contributions to the current-current integral.
+
+Local checks after adding adaptive mode:
+
+```text
+fixed    refresh=1  max diff vs stable projection = 0.000e+00
+fixed    refresh=10 max diff vs stable projection = 4.369e-10
+adaptive refresh=10 max diff vs stable projection = 4.368e-10
+adaptive timing on validator: projected=0.039s propagated=0.010s speedup=3.78x
+
+adaptive CLI smoke:
+rho_s_current = 0.08451515225431375
+rho_s_dia     = 0.08344044995056438
+```
+
+CADES checks after syncing the code:
+
+```text
+fixed    refresh=1  max diff vs stable projection = 0.000e+00
+fixed    refresh=10 max diff vs stable projection = 1.112e-09
+adaptive refresh=10 max diff vs stable projection = 1.111e-09
+adaptive timing on validator: projected=0.080s propagated=0.020s speedup=3.99x
+
+adaptive CLI smoke:
+rho_s_current = 0.08451515262458043
+rho_s_dia     = 0.08344045024538552
+```
+
+The two-rank CADES MPI smoke test also passed with
+`--bkt-adaptive-refresh=true`, confirming that the MPI wrapper forwards the new
+options.  No large rerun was submitted after this adaptive-refresh update.

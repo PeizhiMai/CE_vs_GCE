@@ -34,6 +34,11 @@ function parse_args(args)
         "measure_equal_time" => true,
         "bkt_current_estimator" => "projected",
         "bkt_refresh_interval" => 10,
+        "bkt_adaptive_refresh" => false,
+        "bkt_refresh_tol" => 1e-7,
+        "bkt_refresh_min" => 1,
+        "bkt_refresh_max" => 20,
+        "bkt_refresh_growth_patience" => 3,
         "seed" => 1234,
         "max_batches" => 5,
         "use_charge_hs" => false,
@@ -103,6 +108,16 @@ function parse_args(args)
             params["bkt_current_estimator"] = lowercase(split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--bkt-refresh-interval=")
             params["bkt_refresh_interval"] = parse(Int, split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--bkt-adaptive-refresh=")
+            params["bkt_adaptive_refresh"] = parse(Bool, split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--bkt-refresh-tol=")
+            params["bkt_refresh_tol"] = parse(Float64, split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--bkt-refresh-min=")
+            params["bkt_refresh_min"] = parse(Int, split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--bkt-refresh-max=")
+            params["bkt_refresh_max"] = parse(Int, split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--bkt-refresh-growth-patience=")
+            params["bkt_refresh_growth_patience"] = parse(Int, split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--use-charge-hs=")
             params["use_charge_hs"] = parse(Bool, split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--sys-type=")
@@ -340,7 +355,24 @@ function measure_equal_time_observables(system, ρup, ρdn; kx_value=nothing)
     return (energy[1], energy[2], energy[3], docc, kx)
 end
 
-function measure_bkt_observables(system, ρup, ρdn, Bup, Bdn, prefix_up, suffix_up, prefix_dn, suffix_dn; estimator::String="projected", refresh_interval::Int=10)
+function measure_bkt_observables(
+    system,
+    ρup,
+    ρdn,
+    Bup,
+    Bdn,
+    prefix_up,
+    suffix_up,
+    prefix_dn,
+    suffix_dn;
+    estimator::String="projected",
+    refresh_interval::Int=10,
+    adaptive_refresh::Bool=false,
+    refresh_tol::Float64=1e-7,
+    refresh_min::Int=1,
+    refresh_max::Int=max(refresh_interval, refresh_min),
+    refresh_growth_patience::Int=3,
+)
     lx, ly, lz = system.Ns
     lz == 1 || error("BKT stiffness observables assume a 2D lattice")
     qxmin = 2π / lx
@@ -354,7 +386,13 @@ function measure_bkt_observables(system, ρup, ρdn, Bup, Bdn, prefix_up, suffix
     elseif estimator == "propagated"
         λ = measure_current_responses_unequaltime_propagated(
             system, ρup, ρdn, Bup, Bdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
-            momenta, refresh_interval=refresh_interval,
+            momenta;
+            refresh_interval=refresh_interval,
+            adaptive_refresh=adaptive_refresh,
+            refresh_tol=refresh_tol,
+            refresh_min=refresh_min,
+            refresh_max=refresh_max,
+            refresh_growth_patience=refresh_growth_patience,
         )
     else
         error("unknown --bkt-current-estimator=$(estimator); expected projected or propagated")
@@ -861,6 +899,11 @@ function main(args=ARGS)
                     system, ρup, ρdn, Bup, Bdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
                     estimator=params["bkt_current_estimator"],
                     refresh_interval=params["bkt_refresh_interval"],
+                    adaptive_refresh=params["bkt_adaptive_refresh"],
+                    refresh_tol=params["bkt_refresh_tol"],
+                    refresh_min=params["bkt_refresh_min"],
+                    refresh_max=params["bkt_refresh_max"],
+                    refresh_growth_patience=params["bkt_refresh_growth_patience"],
                 ))
                 sum_bkt .+= bkt_vals
                 sumsq_bkt .+= bkt_vals .^ 2
