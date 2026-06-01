@@ -1748,3 +1748,49 @@ rho_s_dia     = 0.08344045024538552
 The two-rank CADES MPI smoke test also passed with
 `--bkt-adaptive-refresh=true`, confirming that the MPI wrapper forwards the new
 options.  No large rerun was submitted after this adaptive-refresh update.
+
+### Adaptive BKT-only 3x3 production reruns submitted (2026-06-01)
+
+After aligning the CE adaptive refresh tolerance with the SmoQyDQMC
+`δG_max=1e-6` convention, two BKT/equal-time-only 3x3 CE-QMC reruns were
+submitted on CADES.  These runs intentionally skip unequal-time one-particle
+Green-function measurement:
+
+```text
+common current estimator:
+  --measure-greens=false
+  --measure-bkt=true
+  --measure-equal-time=true
+  --bkt-current-estimator=propagated
+  --bkt-adaptive-refresh=true
+  --bkt-refresh-interval=10
+  --bkt-refresh-tol=1e-6
+  --bkt-refresh-min=1
+  --bkt-refresh-max=20
+  --bkt-refresh-growth-patience=3
+```
+
+Submitted jobs:
+
+```text
+dtau = 0.1 job id: 5393324
+job name: ce_bkt3x3_d01_ad100k
+script: /home/9pm/nUHubbard/scripts/interacting_qmc_ed/job_ce_bkt_3x3_um5_beta10_dtau01_mpi32_adaptive_bktonly_20260601_cades.sbatch
+output: /home/9pm/nUHubbard/runs/ce_bkt_3x3_um5_beta10_dtau01_MPI32_ADAPTIVE_BKTONLY_Ntherm10000_Nmeas100000perrank_seed20260601
+comparison BKT: /home/9pm/nUHubbard/runs/compare_ce_bkt_3x3_um5_dtau01_MPI32_ADAPTIVE_BKTONLY_100000perrank_vs_full_ed.tsv
+settings: 32 MPI ranks, 10000 warmup/rank, 100000 measurements/rank, walltime 16h
+
+dtau = 0.05 job id: 5393325
+job name: ce_bkt3x3_d005_ad30k
+script: /home/9pm/nUHubbard/scripts/interacting_qmc_ed/job_ce_bkt_3x3_um5_beta10_dtau005_mpi64_adaptive_bktonly_20260601_cades.sbatch
+output: /home/9pm/nUHubbard/runs/ce_bkt_3x3_um5_beta10_dtau005_MPI64_ADAPTIVE_BKTONLY_Ntherm5000_Nmeas30000perrank_seed20260601
+comparison BKT: /home/9pm/nUHubbard/runs/compare_ce_bkt_3x3_um5_dtau005_MPI64_ADAPTIVE_BKTONLY_30000perrank_vs_full_ed.tsv
+settings: 64 MPI ranks, 5000 warmup/rank, 30000 measurements/rank, walltime 10h
+```
+
+Initial Slurm state immediately after submission:
+
+```text
+5393324 PENDING ce_bkt3x3_d01_ad100k  (Priority)
+5393325 PENDING ce_bkt3x3_d005_ad30k  (Priority)
+```
