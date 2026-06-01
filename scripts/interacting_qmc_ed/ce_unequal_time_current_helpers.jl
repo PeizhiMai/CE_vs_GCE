@@ -115,6 +115,23 @@ function ce_measure_KxPerSite(system, ρup::DensityMatrix, ρdn::DensityMatrix)
     return (ce_measure_bilinear_density(ρup, Kx) + ce_measure_bilinear_density(ρdn, Kx)) / system.V
 end
 
+function ce_measure_Energy(system, ρup::DensityMatrix, ρdn::DensityMatrix)
+    T = system.T
+    ρu = ρup.ρ₁
+    ρd = ρdn.ρ₁
+    kinetic = zero(ComplexF64)
+    @inbounds for idx in eachindex(T)
+        if T[idx] != 0
+            kinetic += T[idx] * (ρu[idx] + ρd[idx])
+        end
+    end
+    potential = zero(ComplexF64)
+    @inbounds for i in 1:system.V
+        potential += system.U * ρu[i, i] * ρd[i, i]
+    end
+    return ComplexF64[kinetic, potential, kinetic + potential]
+end
+
 function scale_factorization!(
     Fscaled::LDR{ComplexF64},
     Fsrc::LDR{ComplexF64},

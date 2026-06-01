@@ -143,7 +143,7 @@ function run_batch(system, qmc)
 
         λL = real(measure_current_response_unequaltime(system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn, qx=qxmin, qy=0.0))
         λT = real(measure_current_response_unequaltime(system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn, qx=0.0, qy=qymin))
-        kx = real(measure_KxPerSite(system, ρup, ρdn))
+        kx = real(ce_measure_KxPerSite(system, ρup, ρdn))
         ρs = 0.25 * (λL - λT)
         ρs_dia = 0.25 * (-kx - λT)
         data[sample, :] .= (λL, λT, kx, ρs, ρs_dia)

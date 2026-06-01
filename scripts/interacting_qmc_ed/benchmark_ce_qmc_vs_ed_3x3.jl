@@ -6,6 +6,8 @@ using Statistics
 using TOML
 using CanEnsAFQMC
 
+include(joinpath(@__DIR__, "ce_unequal_time_current_helpers.jl"))
+
 function parse_args(args)
     params = Dict(
         "lx" => 3,
@@ -140,7 +142,7 @@ function measure_batch(system, qmc)
         update!(system, walker, ρup, 1)
         update!(system, walker, ρdn, ρup)
 
-        energies[sample, :] .= real.(measure_Energy(system, ρup, ρdn))
+        energies[sample, :] .= real.(ce_measure_Energy(system, ρup, ρdn))
         docc[sample] = sum(real.(diag(ρup.ρ₁) .* diag(ρdn.ρ₁))) / nsites
 
         measure_ChargeCorr(corr, ρup, ρdn)

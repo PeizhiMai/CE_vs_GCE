@@ -328,7 +328,7 @@ end
 
 function measure_equal_time_observables(system, ρup, ρdn; kx_value=nothing)
     nsites = system.V
-    energy = real.(measure_Energy(system, ρup, ρdn)) ./ nsites
+    energy = real.(ce_measure_Energy(system, ρup, ρdn)) ./ nsites
     docc = sum(real.(diag(ρup.ρ₁) .* diag(ρdn.ρ₁))) / nsites
     kx = kx_value === nothing ? real(ce_measure_KxPerSite(system, ρup, ρdn)) : real(kx_value)
     return (energy[1], energy[2], energy[3], docc, kx)
