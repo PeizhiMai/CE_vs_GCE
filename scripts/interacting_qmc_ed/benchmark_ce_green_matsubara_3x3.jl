@@ -339,14 +339,12 @@ function measure_bkt_observables(system, ρup, ρdn, prefix_up, suffix_up, prefi
     lz == 1 || error("BKT stiffness observables assume a 2D lattice")
     qxmin = 2π / lx
     qymin = 2π / ly
-    λL = real(measure_current_response_unequaltime(
+    λ = measure_current_responses_unequaltime(
         system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
-        qx=qxmin, qy=0.0,
-    ))
-    λT = real(measure_current_response_unequaltime(
-        system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
-        qx=0.0, qy=qymin,
-    ))
+        [(qxmin, 0.0), (0.0, qymin)],
+    )
+    λL = real(λ[1])
+    λT = real(λ[2])
     kx = real(ce_measure_KxPerSite(system, ρup, ρdn))
     ρs_current = 0.25 * (λL - λT)
     ρs_diamagnetic = 0.25 * (-kx - λT)

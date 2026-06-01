@@ -303,6 +303,50 @@ function canonical_bilinear_product_eig(
     return out
 end
 
+function canonical_bilinear_product_weight!(
+    W::AbstractMatrix{ComplexF64},
+    B̃::AbstractMatrix{ComplexF64},
+    n::AbstractVector{ComplexF64},
+    ninj::AbstractMatrix{ComplexF64},
+)
+    Ns = length(n)
+    fill!(W, 0)
+    @inbounds for i in 1:Ns
+        diag_weight = zero(ComplexF64)
+        for k in 1:Ns
+            diag_weight += B̃[k, k] * ninj[i, k]
+        end
+        W[i, i] = diag_weight
+        for j in 1:Ns
+            i == j && continue
+            W[i, j] = B̃[j, i] * (n[i] - ninj[i, j])
+        end
+    end
+    return W
+end
+
+function canonical_bilinear_product_weight(
+    B̃::AbstractMatrix{ComplexF64},
+    n::AbstractVector{ComplexF64},
+    ninj::AbstractMatrix{ComplexF64},
+)
+    return canonical_bilinear_product_weight!(
+        zeros(ComplexF64, length(n), length(n)),
+        B̃, n, ninj,
+    )
+end
+
+function canonical_bilinear_product_from_weight(
+    Ã::AbstractMatrix{ComplexF64},
+    W::AbstractMatrix{ComplexF64},
+)
+    out = zero(ComplexF64)
+    @inbounds for idx in eachindex(Ã, W)
+        out += Ã[idx] * W[idx]
+    end
+    return out
+end
+
 function canonical_bilinear_expect_eig(
     Ã::AbstractMatrix{ComplexF64},
     n::AbstractVector{ComplexF64},
@@ -764,6 +808,105 @@ function canonical_same_spin_current_response_fast(
     return response
 end
 
+function canonical_same_spin_current_responses_fast(
+    system,
+    ρ::DensityMatrix,
+    prefix::Vector{<:LDR},
+    momenta::AbstractVector{<:Tuple{Float64,Float64}};
+    spin::Int=1,
+)
+    V = system.V
+    L = system.L
+    Δτ = system.β / system.L
+    nq = length(momenta)
+
+    t = ρ.t[]
+    λ = ComplexF64.(collect(@view ρ.λ[t]))
+    P = ComplexF64.(@view ρ.P[:, t])
+    P⁻¹ = ComplexF64.(@view ρ.P⁻¹[t, :])
+    n, ninj = canonical_occ_paircorr_direct(λ, system.N[spin])
+
+    Jq = [ce_current_operator_x_entries(system, qx=qx, qy=qy) for (qx, qy) in momenta]
+    Jm = [ce_current_operator_x_entries(system, qx=-qx, qy=-qy) for (qx, qy) in momenta]
+    B̃ = [zeros(ComplexF64, V, V) for _ in 1:nq]
+    W = [zeros(ComplexF64, V, V) for _ in 1:nq]
+    j0 = zeros(ComplexF64, nq)
+    JP = zeros(ComplexF64, V, V)
+
+    @inbounds for iq in 1:nq
+        mul_current_entries!(JP, Jm[iq], P)
+        mul!(B̃[iq], P⁻¹, JP)
+        canonical_bilinear_product_weight!(W[iq], B̃[iq], n, ninj)
+        j0[iq] = canonical_bilinear_expect_eig(B̃[iq], n)
+    end
+
+    Icomplex = Matrix{ComplexF64}(I, V, V)
+    ws = ldr_workspace(Icomplex)
+    U = zeros(ComplexF64, V, V)
+    Q = zeros(ComplexF64, V, V)
+    Qlu = zeros(ComplexF64, V, V)
+    JQ = zeros(ComplexF64, V, V)
+    Ã = zeros(ComplexF64, V, V)
+
+    responses = zeros(ComplexF64, nq)
+    jτ_q = zeros(ComplexF64, L, nq)
+    j0_m = zeros(ComplexF64, L, nq)
+    @inbounds for iq in 1:nq
+        j0_m[:, iq] .= j0[iq]
+    end
+
+    @inbounds for l in 0:(L - 1)
+        if l == 0
+            for iq in 1:nq
+                mul_current_entries!(JQ, Jq[iq], P)
+                mul!(Ã, P⁻¹, JQ)
+                responses[iq] += canonical_bilinear_product_from_weight(Ã, W[iq])
+                jτ_q[l + 1, iq] = canonical_bilinear_expect_eig(Ã, n)
+            end
+        else
+            copyto!(U, prefix[l + 1], ws)
+            mul!(Q, U, P)
+            copyto!(Qlu, Q)
+            F = lu!(Qlu)
+            for iq in 1:nq
+                mul_current_entries!(JQ, Jq[iq], Q)
+                copyto!(Ã, JQ)
+                ldiv!(F, Ã)
+                responses[iq] += canonical_bilinear_product_from_weight(Ã, W[iq])
+                jτ_q[l + 1, iq] = canonical_bilinear_expect_eig(Ã, n)
+            end
+        end
+    end
+
+    responses .*= Δτ / system.V
+    return (responses=responses, jτ_q=jτ_q, j0_m=j0_m)
+end
+
+function measure_current_responses_unequaltime(
+    system,
+    ρup::DensityMatrix,
+    ρdn::DensityMatrix,
+    prefix_up::Vector{<:LDR},
+    suffix_up::Vector{<:LDR},
+    prefix_dn::Vector{<:LDR},
+    suffix_dn::Vector{<:LDR},
+    momenta::AbstractVector{<:Tuple{Float64,Float64}},
+)
+    up = canonical_same_spin_current_responses_fast(system, ρup, prefix_up, momenta, spin=1)
+    dn = canonical_same_spin_current_responses_fast(system, ρdn, prefix_dn, momenta, spin=2)
+    Δτ = system.β / system.L
+    nq = length(momenta)
+    out = zeros(ComplexF64, nq)
+    @inbounds for iq in 1:nq
+        cross = Δτ * sum(
+            up.jτ_q[:, iq] .* dn.j0_m[:, iq] .+
+            dn.jτ_q[:, iq] .* up.j0_m[:, iq],
+        ) / system.V
+        out[iq] = up.responses[iq] + dn.responses[iq] + cross
+    end
+    return out
+end
+
 function measure_current_response_unequaltime(
     system,
     ρup::DensityMatrix,
@@ -775,9 +918,8 @@ function measure_current_response_unequaltime(
     qx::Float64,
     qy::Float64,
 )
-    up = canonical_same_spin_current_response_fast(system, ρup, prefix_up, qx=qx, qy=qy, spin=1, return_expectations=true)
-    dn = canonical_same_spin_current_response_fast(system, ρdn, prefix_dn, qx=qx, qy=qy, spin=2, return_expectations=true)
-    Δτ = system.β / system.L
-    cross = Δτ * sum(up.jτ_q .* dn.j0_m .+ dn.jτ_q .* up.j0_m) / system.V
-    return up.response + dn.response + cross
+    return measure_current_responses_unequaltime(
+        system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
+        [(qx, qy)],
+    )[1]
 end

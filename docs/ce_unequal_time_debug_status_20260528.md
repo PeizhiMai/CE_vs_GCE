@@ -1455,3 +1455,42 @@ sample, and total measured-configuration cost fell from roughly `213 s` to
 roughly `12 s` for the timing script.  The remaining major cost is now the QMC
 sweep/update itself and the prefix/suffix construction, not the current-response
 algorithm.
+
+### Batched BKT-momentum current-response optimization (2026-06-01)
+
+The first fast current estimator removed the canonical Fourier loop, but the BKT
+measurement still evaluated the longitudinal and transverse momenta as two
+separate calls.  Each call rebuilt the same dense prefix product in the full
+propagator eigenbasis and refactorized the same slice matrix for a given spin.
+
+`measure_bkt_observables` now calls `measure_current_responses_unequaltime` with
+both BKT momenta `[(2π/Lx,0),(0,2π/Ly)]` at once.  For each spin and imaginary-
+time slice this reuses:
+
+- the canonical occupations/pair occupations,
+- the dense transformed prefix product `Q = U_l P`, and
+- one LU factorization of `Q` for both current momenta.
+
+The bilinear-product weights that depend only on `J(-q)` and the fixed-sector
+occupations are also precomputed once per momentum, so each slice only contracts
+the transformed `J(q)` matrix with a prebuilt weight matrix.
+
+CADES timing for one 12x12 measured configuration (`cluster_size=144`,
+`num_fourier_points=145`, same random seed as previous timing):
+
+```text
+sweep                         7.01 s
+density update                3.29 s
+B-slice/prefix build          3.96 s
+lambda_L single-call          2.81 s
+lambda_T single-call          1.18 s
+lambda_L/T batched            1.52 s
+total measure, single calls  11.24 s
+total measure, batched        8.78 s
+```
+
+This is a further `~22%` reduction in total BKT measured-configuration time and
+a `~2.6x` reduction in the current-response part relative to two separate fast
+calls.  Relative to the original Fourier/inverse implementation, the full
+`lambda_L + lambda_T` current-response cost has fallen from roughly `206 s` to
+roughly `1.5 s` for this timing case.
