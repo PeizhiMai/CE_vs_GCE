@@ -1156,7 +1156,7 @@ function canonical_same_spin_current_responses_propagated_adaptive(
     suffix::Vector{<:LDR},
     momenta::AbstractVector{<:Tuple{Float64,Float64}};
     refresh_interval::Int=10,
-    refresh_tol::Float64=1e-7,
+    refresh_tol::Float64=1e-6,
     refresh_min::Int=1,
     refresh_max::Int=max(refresh_interval, refresh_min),
     refresh_growth_patience::Int=3,
@@ -1345,7 +1345,7 @@ function measure_current_responses_unequaltime_propagated(
     momenta::AbstractVector{<:Tuple{Float64,Float64}};
     refresh_interval::Int=10,
     adaptive_refresh::Bool=false,
-    refresh_tol::Float64=1e-7,
+    refresh_tol::Float64=1e-6,
     refresh_min::Int=1,
     refresh_max::Int=max(refresh_interval, refresh_min),
     refresh_growth_patience::Int=3,

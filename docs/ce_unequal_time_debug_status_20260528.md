@@ -1635,6 +1635,10 @@ is:
 --measure-equal-time=true
 --bkt-current-estimator=propagated
 --bkt-refresh-interval=10
+--bkt-adaptive-refresh=true
+--bkt-refresh-tol=1e-6
+--bkt-refresh-min=1
+--bkt-refresh-max=20
 ```
 
 Sanity checks completed locally:
@@ -1679,7 +1683,7 @@ CLI options:
 
 ```text
 --bkt-adaptive-refresh=true
---bkt-refresh-tol=1e-7
+--bkt-refresh-tol=1e-6
 --bkt-refresh-min=1
 --bkt-refresh-max=20
 --bkt-refresh-growth-patience=3
@@ -1689,6 +1693,11 @@ The recommended lower bound is `--bkt-refresh-min=1`, so that the adaptive
 logic can always fall back to measuring a rejected segment endpoint from the
 stable LDR reconstruction without using any unstable propagated intermediate
 slice.
+
+The CE `--bkt-refresh-tol` is the direct analogue of the SmoQyDQMC `δG_max`
+threshold.  The SmoQyDQMC scripts in this repo use `δG_max=1e-6` with
+`n_stab=10`; the CE default has therefore been set to
+`--bkt-refresh-tol=1e-6`.
 
 Algorithm:
 

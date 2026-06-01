@@ -11,7 +11,7 @@ function compare_projected_and_propagated(;
     refresh_interval::Int,
     tolerance::Float64,
     adaptive_refresh::Bool=false,
-    refresh_tol::Float64=1e-7,
+    refresh_tol::Float64=1e-6,
     refresh_min::Int=1,
     refresh_max::Int=max(refresh_interval, refresh_min),
 )
@@ -130,7 +130,7 @@ function main()
         refresh_interval=10,
         tolerance=1e-6,
         adaptive_refresh=true,
-        refresh_tol=1e-7,
+        refresh_tol=1e-6,
         refresh_min=1,
         refresh_max=20,
     )
