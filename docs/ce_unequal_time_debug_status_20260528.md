@@ -1551,3 +1551,60 @@ runs/compare_ce_bkt_3x3_um5_dtau005_MPI64_CURRENTFIX_30000perrank_vs_full_ed.tsv
 
 The new `BATCHFAST` reruns use separate output roots with `seed20260601`, so they
 will not overwrite the archived pre-batched results.
+
+### BATCHFAST jobs canceled; stable batched projection reruns submitted (2026-06-01)
+
+The first post-fast-estimator `BATCHFAST` reruns were started as jobs `5393117`
+and `5393118`, but their rank-1 batch logs immediately showed unphysical BKT
+stiffness values of order `1e5--1e7`.  They were canceled after about eight
+minutes to avoid wasting CADES allocation:
+
+```text
+5393117 ce_bkt3x3_d01_bfast100k    CANCELLED  elapsed=00:07:52
+5393118 ce_bkt3x3_d005_bfast30k    CANCELLED  elapsed=00:07:52
+```
+
+A local diagnostic showed the eigenbasis fast estimator can become numerically
+unstable at the beta=10 3x3 benchmark point: for one sampled configuration the
+stable canonical Fourier-projection estimator gave `lambda_L≈0.357` and
+`lambda_T≈0.467`, while the eigenbasis fast path gave values of order `1e3`.
+The exact-trace beta=1 validators still pass, so this is a low-temperature
+numerical-stability problem rather than a Markov-chain ensemble change.
+
+The production BKT measurement path was therefore switched back to the stable
+canonical Fourier-projection estimator, but batched over the two BKT momenta so
+that each `(Fourier point, imaginary-time slice)` Green-function construction is
+reused for both `q=(2π/Lx,0)` and `q=(0,2π/Ly)`.  A local beta=10 smoke test
+with 10 samples gave reasonable values:
+
+```text
+rho_s_current = 0.0845
+rho_s_dia     = 0.0834
+```
+
+New stable-batched reruns were submitted:
+
+```text
+dtau = 0.1 job id: 5393119
+job name: ce_bkt3x3_d01_stab100k
+script: /home/9pm/nUHubbard/scripts/interacting_qmc_ed/job_ce_gktau_bkt_3x3_um5_beta10_dtau01_mpi32_stablebatch_20260601_cades.sbatch
+output: /home/9pm/nUHubbard/runs/ce_gktau_bkt_3x3_um5_beta10_dtau01_MPI32_STABLEBATCH_Ntherm10000_Nmeas100000perrank_seed20260601
+comparison G: /home/9pm/nUHubbard/runs/compare_ce_gktau_bkt_3x3_um5_dtau01_MPI32_STABLEBATCH_100000perrank_vs_full_ed
+comparison BKT: /home/9pm/nUHubbard/runs/compare_ce_bkt_3x3_um5_dtau01_MPI32_STABLEBATCH_100000perrank_vs_full_ed.tsv
+settings: 32 MPI ranks, 10000 warmup/rank, 100000 measurements/rank, walltime 16h
+
+dtau = 0.05 job id: 5393120
+job name: ce_bkt3x3_d005_stab30k
+script: /home/9pm/nUHubbard/scripts/interacting_qmc_ed/job_ce_gktau_bkt_3x3_um5_beta10_dtau005_mpi64_stablebatch_20260601_cades.sbatch
+output: /home/9pm/nUHubbard/runs/ce_gktau_bkt_3x3_um5_beta10_dtau005_MPI64_STABLEBATCH_Ntherm5000_Nmeas30000perrank_seed20260601
+comparison G: /home/9pm/nUHubbard/runs/compare_ce_gktau_bkt_3x3_um5_dtau005_MPI64_STABLEBATCH_30000perrank_vs_full_ed
+comparison BKT: /home/9pm/nUHubbard/runs/compare_ce_bkt_3x3_um5_dtau005_MPI64_STABLEBATCH_30000perrank_vs_full_ed.tsv
+settings: 64 MPI ranks, 5000 warmup/rank, 30000 measurements/rank, walltime 10h
+```
+
+For runtime comparison, the pre-batched stable `CURRENTFIX` jobs completed in:
+
+```text
+5391551 ce_bkt3x3_dt01_fix100k  COMPLETED  elapsed=10:08:29
+5391552 ce_bkt3x3_dt005_fix30k  COMPLETED  elapsed=06:10:31
+```

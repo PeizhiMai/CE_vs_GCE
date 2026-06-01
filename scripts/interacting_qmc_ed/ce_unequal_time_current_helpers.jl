@@ -882,6 +882,82 @@ function canonical_same_spin_current_responses_fast(
     return (responses=responses, jτ_q=jτ_q, j0_m=j0_m)
 end
 
+function canonical_same_spin_current_responses_projected(
+    system,
+    ρ::DensityMatrix,
+    prefix::Vector{<:LDR},
+    suffix::Vector{<:LDR},
+    momenta::AbstractVector{<:Tuple{Float64,Float64}},
+)
+    V = system.V
+    L = system.L
+    Nft = ρ.Nft
+    Δτ = system.β / system.L
+    nq = length(momenta)
+
+    Icomplex = Matrix{ComplexF64}(I, V, V)
+    ws = ldr_workspace(Icomplex)
+    tmp = similar(Icomplex)
+    full_scaled = ldr(Icomplex)
+    suffix_scaled = ldr(Icomplex)
+    Gττ = zeros(ComplexF64, V, V)
+    G00 = zeros(ComplexF64, V, V)
+    Gτ0 = zeros(ComplexF64, V, V)
+    G0τ = zeros(ComplexF64, V, V)
+
+    Jq = [ce_current_operator_x_entries(system, qx=qx, qy=qy) for (qx, qy) in momenta]
+    Jm = [ce_current_operator_x_entries(system, qx=-qx, qy=-qy) for (qx, qy) in momenta]
+    responses = zeros(ComplexF64, nq)
+    jτ_q = zeros(ComplexF64, L, nq)
+    j0_m = zeros(ComplexF64, L, nq)
+    response_m = zeros(ComplexF64, nq)
+
+    full = prefix[end]
+    @inbounds for m in 1:Nft
+        z = ComplexF64(ρ.expiφμ[m])
+        w = ComplexF64(ρ.Z̃ₘ[m]) / Nft
+        fill!(response_m, 0)
+
+        scale_factorization!(full_scaled, full, z, ws, tmp)
+        inv_IpA!(Gττ, full_scaled, ws)
+        copyto!(G00, Gττ)
+        copyto!(Gτ0, Icomplex)
+        @. Gτ0 = Gτ0 - Gττ
+        @. G0τ = -Gττ
+        for iq in 1:nq
+            response_m[iq] += current_corr_from_entries(
+                system, Jq[iq], Jm[iq], Gττ, G00;
+                Gτ0₁=Gτ0, G0τ₁=G0τ, same_spin=true,
+            )
+            jτ_q[1, iq] += w * current_expect_from_entries(Jq[iq], Gττ)
+            j0_m[1, iq] += w * current_expect_from_entries(Jm[iq], G00)
+        end
+
+        for l in 1:(L - 1)
+            U = prefix[l + 1]
+            Vfac = suffix[l + 1]
+            scale_factorization!(suffix_scaled, Vfac, z, ws, tmp)
+            inv_IpUV!(Gττ, U, suffix_scaled, ws)
+            inv_IpUV!(G00, suffix_scaled, U, ws)
+            inv_invUpV!(Gτ0, U, suffix_scaled, ws)
+            inv_invUpV!(G0τ, suffix_scaled, U, ws)
+            @. G0τ = -G0τ
+            for iq in 1:nq
+                response_m[iq] += current_corr_from_entries(
+                    system, Jq[iq], Jm[iq], Gττ, G00;
+                    Gτ0₁=Gτ0, G0τ₁=G0τ, same_spin=true,
+                )
+                jτ_q[l + 1, iq] += w * current_expect_from_entries(Jq[iq], Gττ)
+                j0_m[l + 1, iq] += w * current_expect_from_entries(Jm[iq], G00)
+            end
+        end
+
+        @. responses += Δτ * w * response_m
+    end
+
+    return (responses=responses, jτ_q=jτ_q, j0_m=j0_m)
+end
+
 function measure_current_responses_unequaltime(
     system,
     ρup::DensityMatrix,
@@ -892,8 +968,12 @@ function measure_current_responses_unequaltime(
     suffix_dn::Vector{<:LDR},
     momenta::AbstractVector{<:Tuple{Float64,Float64}},
 )
-    up = canonical_same_spin_current_responses_fast(system, ρup, prefix_up, momenta, spin=1)
-    dn = canonical_same_spin_current_responses_fast(system, ρdn, prefix_dn, momenta, spin=2)
+    # Use the numerically stable canonical Fourier-projection estimator for
+    # production measurements.  The eigenbasis fast path above is useful as a
+    # diagnostic at small β, but it is not stable enough for the β=10 3x3 ED
+    # benchmark or low-temperature production runs.
+    up = canonical_same_spin_current_responses_projected(system, ρup, prefix_up, suffix_up, momenta)
+    dn = canonical_same_spin_current_responses_projected(system, ρdn, prefix_dn, suffix_dn, momenta)
     Δτ = system.β / system.L
     nq = length(momenta)
     out = zeros(ComplexF64, nq)
