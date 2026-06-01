@@ -1608,3 +1608,62 @@ For runtime comparison, the pre-batched stable `CURRENTFIX` jobs completed in:
 5391551 ce_bkt3x3_dt01_fix100k  COMPLETED  elapsed=10:08:29
 5391552 ce_bkt3x3_dt005_fix30k  COMPLETED  elapsed=06:10:31
 ```
+
+### Stable reruns canceled; propagated stable estimator sanity checks (2026-06-01)
+
+After deciding that rerunning the slow stable-projection path was not useful,
+the submitted stable-batched jobs were canceled before production work:
+
+```text
+5393119 ce_bkt3x3_d01_stab100k   CANCELLED+ elapsed=00:15:58
+5393120 ce_bkt3x3_d005_stab30k   CANCELLED+ elapsed=00:15:58
+```
+
+The current production candidate is now a `propagated` canonical
+Fourier-projection estimator for the BKT current response.  It keeps the
+canonical Fourier projection, so it is still a canonical-ensemble estimator, but
+it avoids recomputing the full stable displaced Green functions at every
+imaginary-time slice.  For each Fourier point it computes the exact stable
+slice-0 Green functions, propagates the displaced Green functions with the
+single-slice `B_l` and `B_l^{-1}` matrices, and refreshes from the stable LDR
+formula every `--bkt-refresh-interval` slices.  The intended production setting
+is:
+
+```text
+--measure-greens=false
+--measure-bkt=true
+--measure-equal-time=true
+--bkt-current-estimator=propagated
+--bkt-refresh-interval=10
+```
+
+Sanity checks completed locally:
+
+```text
+validate_ce_current_trace_formula_3x3.jl: PASS, max |trace - estimator| = 3.367e-05
+validate_ce_current_full_exact_smallL_3x3.jl: PASS, real_diff <= 4.052e-15
+validate_ce_current_propagated_3x3.jl:
+  refresh=1  agrees exactly with stable projection for the tested beta=10 sample
+  refresh=10 max projected-vs-propagated real-part difference = 4.369e-10
+  refresh=10 estimator-kernel timing: projected=0.040s propagated=0.009s, speedup=4.40x
+```
+
+The same propagated-vs-projected validator was synced to CADES and passed there:
+
+```text
+refresh=1  max projected-vs-propagated real-part difference = 0.000e+00
+refresh=10 max projected-vs-propagated real-part difference = 1.112e-09
+refresh=10 estimator-kernel timing: projected=0.080s propagated=0.015s, speedup=5.26x
+```
+
+A CADES login-node BKT-only CLI smoke test also completed:
+
+```text
+warmup_progress warmups_completed=10/10
+batch=1 nsamples=10 total/site=-3.1642043224569862 docc/site=0.35302346864298234 rho_s_current=0.084515154708548 rho_s_dia=0.08344045058714082
+```
+
+An MPI passthrough smoke test with two independent ranks and
+`--measure-greens=false` completed as well, confirming that the MPI wrapper
+accepts and forwards the propagated-estimator options.  These are smoke checks
+only; no new large 3x3 rerun has been submitted yet after this optimization.

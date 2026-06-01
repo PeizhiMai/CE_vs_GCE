@@ -958,6 +958,144 @@ function canonical_same_spin_current_responses_projected(
     return (responses=responses, jτ_q=jτ_q, j0_m=j0_m)
 end
 
+function refresh_projected_displaced_greens!(
+    Gττ::AbstractMatrix{ComplexF64},
+    G00::AbstractMatrix{ComplexF64},
+    Gτ0::AbstractMatrix{ComplexF64},
+    G0τ::AbstractMatrix{ComplexF64},
+    suffix_scaled::LDR{ComplexF64},
+    U::LDR{ComplexF64},
+    Vfac::LDR{ComplexF64},
+    z::ComplexF64,
+    ws::LDRWorkspace{ComplexF64},
+    tmp::AbstractMatrix{ComplexF64},
+)
+    scale_factorization!(suffix_scaled, Vfac, z, ws, tmp)
+    inv_IpUV!(Gττ, U, suffix_scaled, ws)
+    inv_IpUV!(G00, suffix_scaled, U, ws)
+    inv_invUpV!(Gτ0, U, suffix_scaled, ws)
+    inv_invUpV!(G0τ, suffix_scaled, U, ws)
+    @. G0τ = -G0τ
+    return nothing
+end
+
+function measure_projected_slice!(
+    responses::AbstractVector{ComplexF64},
+    jτ_q::AbstractMatrix{ComplexF64},
+    j0_m::AbstractMatrix{ComplexF64},
+    slice_index::Int,
+    system,
+    Jq,
+    Jm,
+    Gττ::AbstractMatrix{ComplexF64},
+    G00::AbstractMatrix{ComplexF64},
+    Gτ0::AbstractMatrix{ComplexF64},
+    G0τ::AbstractMatrix{ComplexF64},
+    w::ComplexF64,
+)
+    @inbounds for iq in eachindex(Jq)
+        responses[iq] += current_corr_from_entries(
+            system, Jq[iq], Jm[iq], Gττ, G00;
+            Gτ0₁=Gτ0, G0τ₁=G0τ, same_spin=true,
+        )
+        jτ_q[slice_index, iq] += w * current_expect_from_entries(Jq[iq], Gττ)
+        j0_m[slice_index, iq] += w * current_expect_from_entries(Jm[iq], G00)
+    end
+    return nothing
+end
+
+function canonical_same_spin_current_responses_propagated(
+    system,
+    ρ::DensityMatrix,
+    Bseq::Vector{<:AbstractMatrix},
+    prefix::Vector{<:LDR},
+    suffix::Vector{<:LDR},
+    momenta::AbstractVector{<:Tuple{Float64,Float64}};
+    refresh_interval::Int=10,
+)
+    V = system.V
+    L = system.L
+    Nft = ρ.Nft
+    Δτ = system.β / system.L
+    nq = length(momenta)
+    refresh_interval < 0 && error("refresh_interval must be nonnegative")
+
+    Icomplex = Matrix{ComplexF64}(I, V, V)
+    ws = ldr_workspace(Icomplex)
+    tmp = similar(Icomplex)
+    full_scaled = ldr(Icomplex)
+    suffix_scaled = ldr(Icomplex)
+    Gττ = zeros(ComplexF64, V, V)
+    G00 = zeros(ComplexF64, V, V)
+    Gτ0 = zeros(ComplexF64, V, V)
+    G0τ = zeros(ComplexF64, V, V)
+
+    Binv = [inv(Matrix{ComplexF64}(B)) for B in Bseq]
+    Jq = [ce_current_operator_x_entries(system, qx=qx, qy=qy) for (qx, qy) in momenta]
+    Jm = [ce_current_operator_x_entries(system, qx=-qx, qy=-qy) for (qx, qy) in momenta]
+    responses = zeros(ComplexF64, nq)
+    jτ_q = zeros(ComplexF64, L, nq)
+    j0_m = zeros(ComplexF64, L, nq)
+    response_m = zeros(ComplexF64, nq)
+
+    full = prefix[end]
+    @inbounds for m in 1:Nft
+        z = ComplexF64(ρ.expiφμ[m])
+        w = ComplexF64(ρ.Z̃ₘ[m]) / Nft
+        fill!(response_m, 0)
+
+        scale_factorization!(full_scaled, full, z, ws, tmp)
+        inv_IpA!(Gττ, full_scaled, ws)
+        copyto!(G00, Gττ)
+        copyto!(Gτ0, Icomplex)
+        @. Gτ0 = Gτ0 - Gττ
+        @. G0τ = -Gττ
+        measure_projected_slice!(
+            response_m, jτ_q, j0_m, 1,
+            system, Jq, Jm, Gττ, G00, Gτ0, G0τ, w,
+        )
+
+        for l in 1:(L - 1)
+            if refresh_interval > 0 && (l % refresh_interval == 0)
+                refresh_projected_displaced_greens!(
+                    Gττ, G00, Gτ0, G0τ,
+                    suffix_scaled, prefix[l + 1], suffix[l + 1], z, ws, tmp,
+                )
+            else
+                B = Bseq[l]
+                B⁻¹ = Binv[l]
+                # Gττ(l) = B_l Gττ(l-1) B_l^{-1}
+                mul!(tmp, B, Gττ)
+                mul!(Gττ, tmp, B⁻¹)
+
+                if l == 1
+                    # The τ=0 equal-time discontinuity uses Gτ0(0)=I-G and
+                    # G0τ(0)=-G, while the l>0 formula starts from
+                    # Gτ0(1)=B_1 G and G0τ(1)=-(I-G)B_1^{-1}.
+                    mul!(Gτ0, B, G00)
+                    @. tmp = G00 - Icomplex
+                    mul!(G0τ, tmp, B⁻¹)
+                else
+                    mul!(tmp, B, Gτ0)
+                    copyto!(Gτ0, tmp)
+                    mul!(tmp, G0τ, B⁻¹)
+                    copyto!(G0τ, tmp)
+                end
+                # G00 = (I + zF)^-1 is independent of the time slice.
+            end
+
+            measure_projected_slice!(
+                response_m, jτ_q, j0_m, l + 1,
+                system, Jq, Jm, Gττ, G00, Gτ0, G0τ, w,
+            )
+        end
+
+        @. responses += Δτ * w * response_m
+    end
+
+    return (responses=responses, jτ_q=jτ_q, j0_m=j0_m)
+end
+
 function measure_current_responses_unequaltime(
     system,
     ρup::DensityMatrix,
@@ -974,6 +1112,40 @@ function measure_current_responses_unequaltime(
     # benchmark or low-temperature production runs.
     up = canonical_same_spin_current_responses_projected(system, ρup, prefix_up, suffix_up, momenta)
     dn = canonical_same_spin_current_responses_projected(system, ρdn, prefix_dn, suffix_dn, momenta)
+    Δτ = system.β / system.L
+    nq = length(momenta)
+    out = zeros(ComplexF64, nq)
+    @inbounds for iq in 1:nq
+        cross = Δτ * sum(
+            up.jτ_q[:, iq] .* dn.j0_m[:, iq] .+
+            dn.jτ_q[:, iq] .* up.j0_m[:, iq],
+        ) / system.V
+        out[iq] = up.responses[iq] + dn.responses[iq] + cross
+    end
+    return out
+end
+
+function measure_current_responses_unequaltime_propagated(
+    system,
+    ρup::DensityMatrix,
+    ρdn::DensityMatrix,
+    Bup::Vector{<:AbstractMatrix},
+    Bdn::Vector{<:AbstractMatrix},
+    prefix_up::Vector{<:LDR},
+    suffix_up::Vector{<:LDR},
+    prefix_dn::Vector{<:LDR},
+    suffix_dn::Vector{<:LDR},
+    momenta::AbstractVector{<:Tuple{Float64,Float64}};
+    refresh_interval::Int=10,
+)
+    up = canonical_same_spin_current_responses_propagated(
+        system, ρup, Bup, prefix_up, suffix_up, momenta,
+        refresh_interval=refresh_interval,
+    )
+    dn = canonical_same_spin_current_responses_propagated(
+        system, ρdn, Bdn, prefix_dn, suffix_dn, momenta,
+        refresh_interval=refresh_interval,
+    )
     Δτ = system.β / system.L
     nq = length(momenta)
     out = zeros(ComplexF64, nq)

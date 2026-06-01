@@ -32,6 +32,8 @@ function parse_args(args)
         "measure_greens" => true,
         "measure_bkt" => true,
         "measure_equal_time" => true,
+        "bkt_current_estimator" => "projected",
+        "bkt_refresh_interval" => 10,
         "seed" => 1234,
         "max_batches" => 5,
         "use_charge_hs" => false,
@@ -97,6 +99,10 @@ function parse_args(args)
             params["measure_bkt"] = parse(Bool, split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--measure-equal-time=")
             params["measure_equal_time"] = parse(Bool, split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--bkt-current-estimator=")
+            params["bkt_current_estimator"] = lowercase(split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--bkt-refresh-interval=")
+            params["bkt_refresh_interval"] = parse(Int, split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--use-charge-hs=")
             params["use_charge_hs"] = parse(Bool, split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--sys-type=")
@@ -334,15 +340,25 @@ function measure_equal_time_observables(system, ρup, ρdn; kx_value=nothing)
     return (energy[1], energy[2], energy[3], docc, kx)
 end
 
-function measure_bkt_observables(system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn)
+function measure_bkt_observables(system, ρup, ρdn, Bup, Bdn, prefix_up, suffix_up, prefix_dn, suffix_dn; estimator::String="projected", refresh_interval::Int=10)
     lx, ly, lz = system.Ns
     lz == 1 || error("BKT stiffness observables assume a 2D lattice")
     qxmin = 2π / lx
     qymin = 2π / ly
-    λ = measure_current_responses_unequaltime(
-        system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
-        [(qxmin, 0.0), (0.0, qymin)],
-    )
+    momenta = [(qxmin, 0.0), (0.0, qymin)]
+    if estimator == "projected"
+        λ = measure_current_responses_unequaltime(
+            system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
+            momenta,
+        )
+    elseif estimator == "propagated"
+        λ = measure_current_responses_unequaltime_propagated(
+            system, ρup, ρdn, Bup, Bdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
+            momenta, refresh_interval=refresh_interval,
+        )
+    else
+        error("unknown --bkt-current-estimator=$(estimator); expected projected or propagated")
+    end
     λL = real(λ[1])
     λT = real(λ[2])
     kx = real(ce_measure_KxPerSite(system, ρup, ρdn))
@@ -842,7 +858,9 @@ function main(args=ARGS)
             bkt_vals = nothing
             if measure_bkt
                 bkt_vals = collect(measure_bkt_observables(
-                    system, ρup, ρdn, prefix_up, suffix_up, prefix_dn, suffix_dn
+                    system, ρup, ρdn, Bup, Bdn, prefix_up, suffix_up, prefix_dn, suffix_dn,
+                    estimator=params["bkt_current_estimator"],
+                    refresh_interval=params["bkt_refresh_interval"],
                 ))
                 sum_bkt .+= bkt_vals
                 sumsq_bkt .+= bkt_vals .^ 2
