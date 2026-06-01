@@ -286,7 +286,8 @@ function main()
 
     e0 = minimum(energies)
     Zshift = sum(exp.(-β .* (energies .- e0)))
-    qmin = 2π / lx
+    qxmin = 2π / lx
+    qymin = 2π / ly
     lambda_l_num = 0.0
     lambda_t_num = 0.0
     kx_num = 0.0
@@ -298,10 +299,10 @@ function main()
         Iup = sparse(I, dim_up, dim_up)
         Idn = sparse(I, dim_dn, dim_dn)
 
-        jx_l_up = one_spin_bilinear_operator(nsites, sector.up_basis, x_bond_terms(lx, ly; t=params["t"], qx=qmin, qy=0.0, current=true))
-        jx_l_dn = one_spin_bilinear_operator(nsites, sector.dn_basis, x_bond_terms(lx, ly; t=params["t"], qx=qmin, qy=0.0, current=true))
-        jx_t_up = one_spin_bilinear_operator(nsites, sector.up_basis, x_bond_terms(lx, ly; t=params["t"], qx=0.0, qy=qmin, current=true))
-        jx_t_dn = one_spin_bilinear_operator(nsites, sector.dn_basis, x_bond_terms(lx, ly; t=params["t"], qx=0.0, qy=qmin, current=true))
+        jx_l_up = one_spin_bilinear_operator(nsites, sector.up_basis, x_bond_terms(lx, ly; t=params["t"], qx=qxmin, qy=0.0, current=true))
+        jx_l_dn = one_spin_bilinear_operator(nsites, sector.dn_basis, x_bond_terms(lx, ly; t=params["t"], qx=qxmin, qy=0.0, current=true))
+        jx_t_up = one_spin_bilinear_operator(nsites, sector.up_basis, x_bond_terms(lx, ly; t=params["t"], qx=0.0, qy=qymin, current=true))
+        jx_t_dn = one_spin_bilinear_operator(nsites, sector.dn_basis, x_bond_terms(lx, ly; t=params["t"], qx=0.0, qy=qymin, current=true))
         kx_up = one_spin_bilinear_operator(nsites, sector.up_basis, x_bond_terms(lx, ly; t=params["t"], current=false))
         kx_dn = one_spin_bilinear_operator(nsites, sector.dn_basis, x_bond_terms(lx, ly; t=params["t"], current=false))
         ky_up = one_spin_bilinear_operator(nsites, sector.up_basis, y_bond_terms(lx, ly; t=params["t"], current=false))

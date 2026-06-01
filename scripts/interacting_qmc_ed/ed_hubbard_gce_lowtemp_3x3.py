@@ -108,7 +108,8 @@ def main():
     print('E0',e0,'selected sectors',selected)
     all_e=[]; all_N=[]; all_D=[]
     Zs=0; Es=Ns=N2s=Ds=Kxs=LLs=LTs=0.0
-    qmin=2*math.pi/args.lx
+    qxmin=2*math.pi/args.lx
+    qymin=2*math.pi/args.ly
     sector_rows=[]
     for e_min,nup,ndn,dim in selected:
       H,up,dn,docc=build_sector(args,nup,ndn)
@@ -117,8 +118,8 @@ def main():
       w=np.exp(-beta*(evals-e0)); Zs += np.sum(w); Es += np.dot(w,evals); Ns += np.sum(w)*(nup+ndn); N2s += np.sum(w)*(nup+ndn)**2
       docc_eig=np.sum(np.abs(vecs)**2 * docc[:,None], axis=0); Ds += np.dot(w,docc_eig)
       du=len(up); dd=len(dn); Iu=eye(du,format='csr'); Id=eye(dd,format='csr')
-      jL=kron(Id,bilinear(n,up,x_terms(args.lx,args.ly,args.t,qx=qmin,current=True)))+kron(bilinear(n,dn,x_terms(args.lx,args.ly,args.t,qx=qmin,current=True)),Iu)
-      jT=kron(Id,bilinear(n,up,x_terms(args.lx,args.ly,args.t,qy=qmin,current=True)))+kron(bilinear(n,dn,x_terms(args.lx,args.ly,args.t,qy=qmin,current=True)),Iu)
+      jL=kron(Id,bilinear(n,up,x_terms(args.lx,args.ly,args.t,qx=qxmin,current=True)))+kron(bilinear(n,dn,x_terms(args.lx,args.ly,args.t,qx=qxmin,current=True)),Iu)
+      jT=kron(Id,bilinear(n,up,x_terms(args.lx,args.ly,args.t,qy=qymin,current=True)))+kron(bilinear(n,dn,x_terms(args.lx,args.ly,args.t,qy=qymin,current=True)),Iu)
       kx=kron(Id,bilinear(n,up,x_terms(args.lx,args.ly,args.t,current=False)))+kron(bilinear(n,dn,x_terms(args.lx,args.ly,args.t,current=False)),Iu)
       JL=vecs.conj().T @ jL.toarray() @ vecs; JT=vecs.conj().T @ jT.toarray() @ vecs; KX=vecs.conj().T @ kx.toarray() @ vecs
       LLs += static_response(evals,JL,beta,e0); LTs += static_response(evals,JT,beta,e0); Kxs += float(np.dot(w,np.real(np.diag(KX))))
