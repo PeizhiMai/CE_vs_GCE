@@ -1922,3 +1922,85 @@ scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta6p80_dtau005_mpi64_adaptive_ch
 
 The scripts were synced to `/home/9pm/nUHubbard/scripts/interacting_qmc_ed/` on
 CADES and passed `bash -n`.  They have not been submitted yet.
+
+### Revised and submitted 12x12 CE n=0.5 beta scan (2026-06-02)
+
+The initial `dtau=0.05` four-point preparation above was superseded before
+submission.  Because the CE finite-size crossing may deviate substantially from
+the GCE estimate, the scan was widened and changed to `dtau=0.1`.
+
+Submitted beta points:
+
+```text
+beta   T=1/beta       Ltau(dtau=0.1)
+7.00   0.142857142857 70
+6.50   0.153846153846 65
+6.00   0.166666666667 60
+7.50   0.133333333333 75
+8.00   0.125000000000 80
+```
+
+Common CE settings:
+
+```text
+Lx=Ly=12
+U=-5
+Nup=Ndn=36
+dtau=0.1
+64 MPI ranks on 2 nodes, one independent chain/rank
+nwarmups=5000 per rank
+nmeas=50000 per rank
+nupdate=3  # CE driver --measure-interval=3
+cluster_size=144
+num_fourier_points=145
+measure_greens=false
+measure_bkt=true
+measure_equal_time=true
+bkt_current_estimator=propagated
+bkt_adaptive_refresh=true
+bkt_refresh_tol=1e-6
+```
+
+Checkpoint/run-length policy:
+
+```text
+initial RUN_MODE=short:
+  Slurm walltime = 01:12:00  # 1.2 h
+  CE runtime/checkpoint stop = 1.0 h
+
+after two valid short checkpoint rounds:
+  scripts auto-resubmit RUN_MODE=long with sbatch --time=04:00:00
+  CE runtime/checkpoint stop = 3.5 h
+```
+
+The auto-upgrade is handled inside each Slurm wrapper.  It only resubmits after
+finding all expected 64 per-rank checkpoint files.  Thus a failed MPI/checkpoint
+leg should not silently advance to long mode.
+
+Prepared files:
+
+```text
+scripts/interacting_qmc_ed/ce_bkt_L12_n05_beta_scan_dtau01_20260602.tsv
+scripts/interacting_qmc_ed/submit_ce_bkt_L12_n05_beta_scan_dtau01_adaptive_20260602_cades.sh
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta7p00_dtau01_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta6p50_dtau01_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta6p00_dtau01_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta7p50_dtau01_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta8p00_dtau01_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+```
+
+The obsolete `dtau=0.05` prepared scripts from the previous section were removed
+locally and from CADES to avoid accidental submission.
+
+Submitted initial short-mode jobs:
+
+```text
+5395719 ceL12n05b7p00  beta=7.00  PENDING (Priority)
+5395720 ceL12n05b6p50  beta=6.50  PENDING (Priority)
+5395721 ceL12n05b6p00  beta=6.00  PENDING (Priority)
+5395722 ceL12n05b7p50  beta=7.50  PENDING (Priority)
+5395723 ceL12n05b8p00  beta=8.00  PENDING (Priority)
+```
+
+A 90-minute heartbeat monitor was created in the Codex app to check these jobs,
+verify two valid short checkpoint rounds, and confirm long-mode resubmission.

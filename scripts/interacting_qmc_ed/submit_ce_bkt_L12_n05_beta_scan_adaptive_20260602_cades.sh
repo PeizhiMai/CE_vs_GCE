@@ -1,8 +1,0 @@
-#!/bin/bash
-set -euo pipefail
-cd /home/9pm/nUHubbard
-mkdir -p logs
-sbatch scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta7p10_dtau005_mpi64_adaptive_checkpoint_20260602_cades.sbatch
-sbatch scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta7p00_dtau005_mpi64_adaptive_checkpoint_20260602_cades.sbatch
-sbatch scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta6p90_dtau005_mpi64_adaptive_checkpoint_20260602_cades.sbatch
-sbatch scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta6p80_dtau005_mpi64_adaptive_checkpoint_20260602_cades.sbatch

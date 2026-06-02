@@ -7,18 +7,21 @@
 #SBATCH --exclusive
 #SBATCH -c 1
 #SBATCH --mem=100G
-#SBATCH -t 04:00:00
+#SBATCH -t 01:12:00
 #SBATCH --chdir=/home/9pm/nUHubbard
-#SBATCH --job-name=ceL12n05b7p00
+#SBATCH --job-name=ceL12n05b6p50
 #SBATCH --output=/home/9pm/nUHubbard/logs/%x_%j.out
 #SBATCH --error=/home/9pm/nUHubbard/logs/%x_%j.err
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=peizhimai@gmail.com
 
 # Checkpointed adaptive canonical-ensemble QMC BKT production point.
-# L=12x12, U=-5, density n=0.5 -> Nup=Ndn=36, beta=7.00 (T=0.142857142857).
+# L=12x12, U=-5, density n=0.5 -> Nup=Ndn=36, beta=6.50 (T=0.153846153846).
 # One MPI rank = one independent Markov chain. Measurements are per rank.
 # This is BKT/equal-time only; unequal-time one-particle G is intentionally disabled.
+# Initial mode: 1.2h walltime, 1h checkpoint/runtime stop. After two valid short
+# checkpoint rounds, the wrapper resubmits future legs as 4h walltime with 3.5h
+# checkpoint/runtime stop by using sbatch --time=04:00:00 and RUN_MODE=long.
 
 set -u -o pipefail
 
@@ -27,29 +30,39 @@ LOG_DIR=${PROJECT}/logs
 mkdir -p "${LOG_DIR}"
 cd "${PROJECT}"
 
-OUTDIR="runs/ce_bkt_L12x12_Um5_n05_beta7p00_dtau0p05_MPI64_ADAPTIVE_Ntherm5000_Nmeas50000perrank_Nupd3_seed2026060905"
+OUTDIR="runs/ce_bkt_L12x12_Um5_n05_beta6p50_dtau0p10_MPI64_ADAPTIVE_Ntherm5000_Nmeas50000perrank_Nupd3_seed2026060850"
 RANKS=${SLURM_NTASKS:-64}
 LX=12
 LY=12
 NUP=36
 NDN=36
 U=-5
-BETA=7.00
-DTAU=0.05
+BETA=6.50
+DTAU=0.1
 NWARMUPS=5000
 BATCH_NSAMPLES=1
 MAX_BATCHES=50000
 MEASURE_INTERVAL=3
-BASE_SEED=2026060905
-CHECKPOINT_FREQ_HOURS=0.50
-RUNTIME_LIMIT_HOURS=3.75
-CHECKPOINT_EVERY_BATCHES=1
-CHECKPOINT_WARMUP_CHUNK=1
+BASE_SEED=2026060850
 CLUSTER_SIZE=144
 NUM_FOURIER_POINTS=145
 AUTO_RESUBMIT=true
 MAX_RESUBMITS=${MAX_RESUBMITS:-1000}
 RESUBMIT_COUNT=${RESUBMIT_COUNT:-0}
+RUN_MODE=${RUN_MODE:-short}
+SHORT_ROUNDS_BEFORE_LONG=${SHORT_ROUNDS_BEFORE_LONG:-2}
+
+if [[ "${RUN_MODE}" == "long" ]]; then
+  CHECKPOINT_FREQ_HOURS=3.50
+  RUNTIME_LIMIT_HOURS=3.50
+  REQUESTED_WALLTIME=04:00:00
+else
+  CHECKPOINT_FREQ_HOURS=1.00
+  RUNTIME_LIMIT_HOURS=1.00
+  REQUESTED_WALLTIME=01:12:00
+fi
+CHECKPOINT_EVERY_BATCHES=1
+CHECKPOINT_WARMUP_CHUNK=1
 
 unset LD_LIBRARY_PATH MPI_PATH MPI_ROOT MPICC MPICXX MPIF77 MPIF90 MPIFC
 unset OMPI_MCA_pml OMPI_MCA_btl
@@ -77,9 +90,9 @@ mkdir -p "${OUTDIR}"
 
 START_EPOCH=$(date +%s)
 echo "[$(date -Is)] starting checkpointed adaptive CE-QMC equal-time+BKT-only production run"
-echo "host=$(hostname) job=${SLURM_JOB_ID:-manual} nodes=${SLURM_JOB_NUM_NODES:-2} ranks=${RANKS} resubmit=${RESUBMIT_COUNT}/${MAX_RESUBMITS} outdir=${OUTDIR}"
-echo "settings: Lx=${LX} Ly=${LY} U=${U} beta=${BETA} T=0.142857142857 dtau=${DTAU} Ltau=140 Nup=${NUP} Ndn=${NDN} warmup/rank=${NWARMUPS} measurements/rank=$((BATCH_NSAMPLES * MAX_BATCHES)) nupdate=${MEASURE_INTERVAL} batches=${MAX_BATCHES} batch_size=${BATCH_NSAMPLES}"
-echo "checkpoint: slurm_walltime=04:00:00 runtime_limit_hours=${RUNTIME_LIMIT_HOURS} checkpoint_freq_hours=${CHECKPOINT_FREQ_HOURS} keep=true auto_resubmit=${AUTO_RESUBMIT}"
+echo "host=$(hostname) job=${SLURM_JOB_ID:-manual} nodes=${SLURM_JOB_NUM_NODES:-2} ranks=${RANKS} mode=${RUN_MODE} resubmit=${RESUBMIT_COUNT}/${MAX_RESUBMITS} outdir=${OUTDIR}"
+echo "settings: Lx=${LX} Ly=${LY} U=${U} beta=${BETA} T=0.153846153846 dtau=${DTAU} Ltau=65 Nup=${NUP} Ndn=${NDN} warmup/rank=${NWARMUPS} measurements/rank=$((BATCH_NSAMPLES * MAX_BATCHES)) nupdate=${MEASURE_INTERVAL} batches=${MAX_BATCHES} batch_size=${BATCH_NSAMPLES}"
+echo "checkpoint: requested_walltime=${REQUESTED_WALLTIME} runtime_limit_hours=${RUNTIME_LIMIT_HOURS} checkpoint_freq_hours=${CHECKPOINT_FREQ_HOURS} keep=true auto_resubmit=${AUTO_RESUBMIT} short_rounds_before_long=${SHORT_ROUNDS_BEFORE_LONG}"
 echo "optimization: cluster_size=${CLUSTER_SIZE} num_fourier_points=${NUM_FOURIER_POINTS} bkt_current_estimator=propagated adaptive_refresh=true refresh_tol=1e-6"
 echo "current_helper_sha256=$(sha256sum scripts/interacting_qmc_ed/ce_unequal_time_current_helpers.jl | awk '{print $1}')"
 echo "driver_sha256=$(sha256sum scripts/interacting_qmc_ed/benchmark_ce_green_matsubara_3x3.jl | awk '{print $1}')"
@@ -123,8 +136,16 @@ if [[ "${AUTO_RESUBMIT}" == "true" && "${checkpoint_stop}" == "true" ]]; then
   if (( RESUBMIT_COUNT < MAX_RESUBMITS )); then
     next_count=$((RESUBMIT_COUNT + 1))
     script_path=$(readlink -f "${BASH_SOURCE[0]}")
-    echo "[$(date -Is)] CE-QMC run incomplete; resubmitting ${script_path} attempt ${next_count}/${MAX_RESUBMITS}"
-    RESUBMIT_COUNT="${next_count}" sbatch "${script_path}"
+    if [[ "${RUN_MODE}" == "short" && "${next_count}" -ge "${SHORT_ROUNDS_BEFORE_LONG}" ]]; then
+      echo "[$(date -Is)] two short checkpoint rounds reached; resubmitting long mode ${script_path} attempt ${next_count}/${MAX_RESUBMITS}"
+      RESUBMIT_COUNT="${next_count}" RUN_MODE=long sbatch --time=04:00:00 "${script_path}"
+    elif [[ "${RUN_MODE}" == "long" ]]; then
+      echo "[$(date -Is)] CE-QMC run incomplete; resubmitting long mode ${script_path} attempt ${next_count}/${MAX_RESUBMITS}"
+      RESUBMIT_COUNT="${next_count}" RUN_MODE=long sbatch --time=04:00:00 "${script_path}"
+    else
+      echo "[$(date -Is)] CE-QMC run incomplete; resubmitting short mode ${script_path} attempt ${next_count}/${MAX_RESUBMITS}"
+      RESUBMIT_COUNT="${next_count}" RUN_MODE=short sbatch "${script_path}"
+    fi
     exit 0
   else
     echo "[$(date -Is)] CE-QMC run incomplete and MAX_RESUBMITS reached: ${OUTDIR}" >&2
