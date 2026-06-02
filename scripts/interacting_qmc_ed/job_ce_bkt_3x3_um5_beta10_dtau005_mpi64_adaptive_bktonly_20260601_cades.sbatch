@@ -81,7 +81,7 @@ END_EPOCH=$(date +%s)
 RUNTIME=$((END_EPOCH - START_EPOCH))
 echo "[$(date -Is)] finished ADAPTIVE_BKTONLY MPI64 CE BKT QMC"
 echo "runtime_seconds=${RUNTIME}"
-echo "runtime_minutes=$(awk -v s=${RUNTIME} 'BEGIN{printf \"%.3f\", s/60.0}')"
+echo "runtime_minutes=$(awk -v s=${RUNTIME} 'BEGIN{printf "%.3f", s/60.0}')"
 ls -lh "${OUTDIR}"
 
 if [[ -f "${OUTDIR}/bkt_observables_qmc.tsv" && -f "${ED_BKT_DIR}/bkt_observables_ed.tsv" ]]; then

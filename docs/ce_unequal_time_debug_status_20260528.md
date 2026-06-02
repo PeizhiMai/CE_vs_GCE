@@ -1794,3 +1794,74 @@ Initial Slurm state immediately after submission:
 5393324 PENDING ce_bkt3x3_d01_ad100k  (Priority)
 5393325 PENDING ce_bkt3x3_d005_ad30k  (Priority)
 ```
+
+### Adaptive BKT-only 3x3 production reruns completed (2026-06-02)
+
+Both adaptive BKT-only jobs completed normally:
+
+```text
+5393324 ce_bkt3x3_d01_ad100k   COMPLETED elapsed=06:51:58
+5393325 ce_bkt3x3_d005_ad30k   COMPLETED elapsed=01:51:58
+```
+
+Runtime comparison against the previous stable `CURRENTFIX` jobs:
+
+```text
+dtau=0.1:  new adaptive BKT-only 06:51:58 vs previous CURRENTFIX 10:08:29
+           speedup = 1.48x, walltime reduction = 32.3%
+
+dtau=0.05: new adaptive BKT-only 01:51:58 vs previous CURRENTFIX 06:10:31
+           speedup = 3.31x, walltime reduction = 69.8%
+```
+
+The completed Slurm logs contain a harmless `awk` quoting error in the
+`runtime_minutes` echo line; the authoritative runtimes above are from `sacct`
+and `runtime_seconds` in the logs.  The Slurm scripts were corrected after the
+run for future submissions.
+
+ED comparison for the main BKT stiffness quantities:
+
+```text
+dtau=0.1 adaptive, 32 ranks, 3.2M total measurements:
+observable             ED              QMC ± stderr            Δ(QMC-ED)       |z|
+rho_s_current          0.0968463910    0.0980790561 ± 0.000174  +0.001232665    7.08
+rho_s_diamagnetic      0.0968463910    0.0968590758 ± 0.000174  +0.000012685    0.073
+lambda_longitudinal    0.6455739792    0.6565114477 ± 0.000176  +0.010937468   62.2
+lambda_transverse      0.2581884150    0.2641952234 ± 0.000658  +0.006006808    9.13
+Kx_per_site           -0.6455739792   -0.6516315264 ± 0.000174  -0.006057547   34.7
+
+dtau=0.05 adaptive, 64 ranks, 1.92M total measurements:
+observable             ED              QMC ± stderr            Δ(QMC-ED)       |z|
+rho_s_current          0.0968463910    0.0972189341 ± 0.000183  +0.000372543    2.04
+rho_s_diamagnetic      0.0968463910    0.0969157013 ± 0.000183  +0.000069310    0.38
+lambda_longitudinal    0.6455739792    0.6483521815 ± 0.000226  +0.002778202   12.3
+lambda_transverse      0.2581884150    0.2594764451 ± 0.000680  +0.001288030    1.90
+Kx_per_site           -0.6455739792   -0.6471392502 ± 0.000226  -0.001565271    6.93
+```
+
+Comparison with the previous `CURRENTFIX` QMC outputs shows the optimized
+adaptive runs are statistically consistent with the old QMC for the main BKT
+quantities:
+
+```text
+dtau=0.1: new adaptive minus old CURRENTFIX
+rho_s_current      +0.000164709, combined |z| = 0.73
+rho_s_diamagnetic  +0.000165260, combined |z| = 0.73
+lambda_longitudinal -0.000296185, combined |z| = 1.19
+lambda_transverse   -0.000955022, combined |z| = 1.12
+Kx_per_site         +0.000293983, combined |z| = 1.19
+
+dtau=0.05: new adaptive minus old CURRENTFIX
+rho_s_current      -0.000093906, combined |z| = 0.35
+rho_s_diamagnetic  -0.000093860, combined |z| = 0.35
+lambda_longitudinal -0.000096380, combined |z| = 0.30
+lambda_transverse   +0.000279243, combined |z| = 0.28
+Kx_per_site         +0.000096199, combined |z| = 0.30
+```
+
+Interpretation: the adaptive optimized estimator did not visibly change the
+QMC central values relative to the previous stable estimator, while reducing
+runtime substantially.  As before, decreasing from `dtau=0.1` to `dtau=0.05`
+brings the current-response result closer to ED; the diamagnetic stiffness is
+already within the ED error bar for both time steps, and the current-form
+stiffness improves from about `7.1σ` to about `2.0σ`.
