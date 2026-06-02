@@ -1865,3 +1865,60 @@ runtime substantially.  As before, decreasing from `dtau=0.1` to `dtau=0.05`
 brings the current-response result closer to ED; the diamagnetic stiffness is
 already within the ED error bar for both time steps, and the current-form
 stiffness improves from about `7.1σ` to about `2.0σ`.
+
+### Prepared 12x12 CE BKT beta scan around the n=0.5 BKT crossing (2026-06-02)
+
+The existing L=12 SmoQyDQMC/GCE BKT analysis gives the following finite-size
+crossing estimates for density `n=0.5`:
+
+```text
+dtau=0.10: Tc = 0.145883127427, bracket T=0.142857142857--0.149253731343
+dtau=0.05: Tc = 0.144546379694 ± 0.000174, bracket T=0.142857142857--0.149253731343
+```
+
+Using the `dtau=0.05` estimate, `beta_c ≈ 1/Tc = 6.9182`.  Four commensurate
+`dtau=0.05` CE beta points were selected around this crossing:
+
+```text
+beta   T=1/beta       Ltau  position
+7.10   0.140845070422 142   below Tc / lower T
+7.00   0.142857142857 140   below Tc / lower T
+6.90   0.144927536232 138   very near crossing, slightly above Tc by GCE estimate
+6.80   0.147058823529 136   above Tc / higher T
+```
+
+Prepared CE production settings for all four points:
+
+```text
+Lx=Ly=12
+U=-5
+Nup=Ndn=36  # n=(36+36)/144=0.5
+dtau=0.05
+64 MPI ranks on 2 nodes, one independent chain/rank
+nwarmups=5000 per rank
+nmeas=50000 per rank
+nupdate=3  # CE driver --measure-interval=3
+cluster_size=144
+num_fourier_points=145
+measure_greens=false
+measure_bkt=true
+measure_equal_time=true
+bkt_current_estimator=propagated
+bkt_adaptive_refresh=true
+bkt_refresh_tol=1e-6
+checkpoint/resubmit enabled with 4h Slurm legs and runtime stop at 3.75h
+```
+
+Prepared local/CADES files:
+
+```text
+scripts/interacting_qmc_ed/ce_bkt_L12_n05_beta_scan_20260602.tsv
+scripts/interacting_qmc_ed/submit_ce_bkt_L12_n05_beta_scan_adaptive_20260602_cades.sh
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta7p10_dtau005_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta7p00_dtau005_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta6p90_dtau005_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+scripts/interacting_qmc_ed/job_ce_bkt_L12_n05_beta6p80_dtau005_mpi64_adaptive_checkpoint_20260602_cades.sbatch
+```
+
+The scripts were synced to `/home/9pm/nUHubbard/scripts/interacting_qmc_ed/` on
+CADES and passed `bash -n`.  They have not been submitted yet.
