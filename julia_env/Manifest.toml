@@ -465,7 +465,7 @@ version = "2.0.0"
 
 [[deps.SmoQyDQMC]]
 deps = ["Checkerboard", "CodecZlib", "FFTW", "FastLapackInterface", "Format", "Glob", "HDF5", "JDQMCFramework", "JDQMCMeasurements", "JLD2", "LatticeUtilities", "LinearAlgebra", "MPI", "MuTuner", "OffsetArrays", "PkgVersion", "Printf", "Random", "Reexport", "StableLinearAlgebra", "StaticArrays", "Statistics", "TOML"]
-git-tree-sha1 = "a71ec04e5c774a52510346d9e2c0c27636291459"
+path = "../external/SmoQyDQMC"
 uuid = "00e12d65-277b-447e-9c1d-a17422dd36f5"
 version = "2.0.12"
 

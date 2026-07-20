@@ -7,3 +7,6 @@
 [submodule "external/papers-code-CanEnsAFQMC"]
 	path = external/papers-code-CanEnsAFQMC
 	url = https://github.com/TongSericus/papers-code-CanEnsAFQMC.git
+[submodule "external/SmoQyDQMC"]
+	path = external/SmoQyDQMC
+	url = https://github.com/PeizhiMai/SmoQyDQMC.jl.git

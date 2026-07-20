@@ -33,3 +33,11 @@ introduced.
 Checkpoint/resume equivalence is a separate gate and must be repeated after
 the OBC fork is pinned, because JLD2 state is only supported within the exact
 same package commit.
+
+## OBC-fork follow-up
+
+The pinned OBC fork is documented in `docs/smoqy_obc_fork.md`. After applying
+the fork, the same fixed-seed attractive and spin-HS PBC cases produced six
+byte-identical scientific CSV files per case relative to the unmodified
+registry v2.0.12 package. Exact per-file hashes are stored in
+`docs/validation/smoqy_obc_postfork_pbc_regression_20260720.json`.
