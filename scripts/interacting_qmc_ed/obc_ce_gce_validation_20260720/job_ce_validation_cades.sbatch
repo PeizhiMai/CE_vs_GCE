@@ -13,6 +13,8 @@
 #SBATCH --output=/home/9pm/nUHubbard_obc_dev/logs/obcCEVal_%A_%a.out
 #SBATCH --error=/home/9pm/nUHubbard_obc_dev/logs/obcCEVal_%A_%a.err
 set -u
+echo "This first-generation CE validation is superseded by job_ce_validation_independent_rdm2_fix2_cades.sbatch." >&2
+exit 2
 PROJECT=${PROJECT:-/home/9pm/nUHubbard_obc_dev}
 export SBATCH_SCRIPT=${SBATCH_SCRIPT:-${PROJECT}/scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_ce_validation_cades.sbatch}
 exec "${PROJECT}/scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/run_ce_validation_task.sh"

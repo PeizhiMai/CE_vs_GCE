@@ -16,5 +16,8 @@
   "run_root": "/home/9pm/nUHubbard_obc_runs/obc_ce_gce_validation_20260720",
   "schema_version": 1,
   "seed_replicates": 2,
+  "superseded": true,
+  "superseded_by": "manifests_independent_rdm2_fix2",
+  "superseded_reason": "CE projected-1RDM Wick estimator and overlapping seed+pID rank streams",
   "warmups": 2000
 }

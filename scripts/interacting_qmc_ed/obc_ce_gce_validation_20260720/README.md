@@ -87,13 +87,21 @@ sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_ce_validati
 sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_gce_validation_cades.sbatch
 ```
 
-The first CE validation generation exposed the projected-1-RDM Wick error.
-Those CE roots are retained as failed diagnostics and are never resumed or
-accepted. The fresh corrective CE generation is
-`manifests_ce_rdm2_fix1/ce_validation_manifest.tsv`, submitted with:
+The first validation generation exposed two independent gate failures:
+
+1. CE same-spin correlations incorrectly Wick-contracted a projected 1-RDM.
+2. Replicate base seeds differed by one while each MPI rank used `seed+pID`,
+   so three of four rank streams overlapped between the nominal replicates.
+
+All first-generation CE and GCE roots, plus the short-lived `rdm2fix1` CE
+attempt, are superseded diagnostics and are never resumed or accepted. The
+fresh generation uses canonical CE two-body RDMs and globally disjoint rank
+streams. Its manifests are under `manifests_independent_rdm2_fix2`, submitted
+with:
 
 ```bash
-sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_ce_validation_rdm2_fix1_cades.sbatch
+sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_ce_validation_independent_rdm2_fix2_cades.sbatch
+sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_gce_validation_independent_rdm2_fix2_cades.sbatch
 ```
 
 ## Acceptance analysis
@@ -101,8 +109,8 @@ sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_ce_validati
 ```bash
 ~/.venvs/myenv/bin/python \
   scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/analyze_validation.py \
-  --ce-manifest scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/manifests_ce_rdm2_fix1/ce_validation_manifest.tsv \
-  --gce-manifest scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/manifests/gce_validation_manifest.tsv \
+  --ce-manifest scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/manifests_independent_rdm2_fix2/ce_validation_manifest.tsv \
+  --gce-manifest scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/manifests_independent_rdm2_fix2/gce_validation_manifest.tsv \
   --outdir results/interacting_qmc_ed/obc_ce_gce_validation_analysis_20260720 \
   --require-complete
 ```

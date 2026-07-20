@@ -150,12 +150,23 @@ def main() -> None:
                             f"missing accepted ED reference CE={ce_key in ce_refs} "
                             f"GCE={gce_key in gce_refs} for L={L}, U={U}, beta={beta}, N={target_n}"
                         )
-                    for dtau in (0.20, 0.10, 0.05):
+                    for dtau_index, dtau in enumerate((0.20, 0.10, 0.05)):
                         ltau = round(beta / dtau)
                         if abs(ltau * dtau - beta) > 1e-12:
                             raise ValueError("validation beta is not commensurate with dtau")
                         for seed_index in (0, 1):
-                            seed = args.base_seed + 1000 * condition_index + seed_index
+                            # Each MPI rank uses rank_seed = seed + pID. Keep
+                            # every rank stream disjoint across both seed
+                            # replicates and all three time steps. Incrementing
+                            # the replicate base by one would overlap three of
+                            # four rank streams and is not an independent-seed
+                            # validation.
+                            seed = (
+                                args.base_seed
+                                + 10_000 * condition_index
+                                + 1_000 * dtau_index
+                                + 100 * seed_index
+                            )
                             stem = (
                                 f"L{L}_U{token(U)}_b{token(beta)}_N{target_n}_"
                                 f"dt{token(dtau)}_seed{seed_index}"
@@ -246,6 +257,15 @@ def main() -> None:
         raise AssertionError("duplicate CE run root")
     if len({row["out_parent"] for row in gce_rows}) != len(gce_rows):
         raise AssertionError("duplicate GCE run root")
+    for rows, ensemble in ((ce_rows, "CE"), (gce_rows, "GCE")):
+        rank_streams: set[int] = set()
+        for row in rows:
+            streams = {
+                int(row["seed"]) + p_id for p_id in range(args.expected_ranks)
+            }
+            if rank_streams & streams:
+                raise AssertionError(f"overlapping {ensemble} MPI rank RNG streams")
+            rank_streams.update(streams)
 
     write_tsv(args.outdir / "ce_validation_manifest.tsv", ce_rows)
     write_tsv(args.outdir / "gce_validation_manifest.tsv", gce_rows)
@@ -262,6 +282,7 @@ def main() -> None:
         "measurements_per_rank": args.measurements_per_rank,
         "run_root": args.run_root,
         "run_tag": args.run_tag,
+        "rank_seed_policy": "seed = base + 10000*condition + 1000*dtau_index + 100*seed_index; rank_seed = seed + pID",
         "ed_reference_dir": str(args.ed_dir),
         "ce_ed_reference_sha256": ce_reference_sha256,
         "gce_ed_reference_sha256": gce_reference_sha256,

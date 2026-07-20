@@ -1,7 +1,6 @@
 {
   "boundary": "open",
   "ce_ed_reference_sha256": "e906d76a24a61570810e22c7e992f2b4794a203700382f0fbbb6ea133dbd9690",
-  "ce_manifest": "ce_validation_manifest.tsv",
   "ce_rows": 72,
   "dtau_values": [
     0.2,
@@ -12,13 +11,12 @@
   "expected_ranks": 4,
   "gce_ed_reference_sha256": "7ef67283989107c1f67d2581ee7b87edb63ff9c552bcd0b334dc63002b367059",
   "gce_rows": 72,
-  "gce_rows_submitted": 0,
   "measurements_per_rank": 10000,
   "physical_conditions_per_ensemble": 12,
-  "run_root": "/home/9pm/nUHubbard_obc_runs/obc_ce_gce_validation_ce_rdm2_20260720",
-  "run_tag": "rdm2fix1",
+  "rank_seed_policy": "seed = base + 10000*condition + 1000*dtau_index + 100*seed_index; rank_seed = seed + pID",
+  "run_root": "/home/9pm/nUHubbard_obc_runs/obc_ce_gce_validation_independent_rdm2_20260720",
+  "run_tag": "independent_rdm2fix2",
   "schema_version": 1,
-  "scope": "CE-only corrective rerun after canonical two-body-RDM estimator fix",
   "seed_replicates": 2,
   "warmups": 2000
 }

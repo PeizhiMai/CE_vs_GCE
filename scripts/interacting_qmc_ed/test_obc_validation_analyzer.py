@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import csv
 import math
 import tempfile
 import unittest
@@ -22,6 +23,24 @@ SPEC.loader.exec_module(ANALYZER)
 
 
 class ValidationAnalyzerTests(unittest.TestCase):
+    def test_final_manifests_have_disjoint_rank_rng_streams(self) -> None:
+        manifest_dir = (
+            Path(__file__).resolve().parent
+            / "obc_ce_gce_validation_20260720"
+            / "manifests_independent_rdm2_fix2"
+        )
+        for name in ("ce_validation_manifest.tsv", "gce_validation_manifest.tsv"):
+            with (manifest_dir / name).open(newline="") as handle:
+                rows = list(csv.DictReader(handle, delimiter="\t"))
+            self.assertEqual(len(rows), 72)
+            streams: list[int] = []
+            for row in rows:
+                streams.extend(
+                    int(row["seed"]) + p_id
+                    for p_id in range(int(row["expected_ranks"]))
+                )
+            self.assertEqual(len(streams), len(set(streams)))
+
     def test_signed_rank_density_ratio_and_jackknife(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

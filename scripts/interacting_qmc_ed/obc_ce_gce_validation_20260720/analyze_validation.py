@@ -460,6 +460,18 @@ def main() -> None:
             manifest_issues.append(f"{ensemble} manifest has duplicate run_id values")
         if len({row[root_field] for row in rows}) != len(rows):
             manifest_issues.append(f"{ensemble} manifest has duplicate run roots")
+        rank_streams: set[int] = set()
+        for row in rows:
+            streams = {
+                int(row["seed"]) + p_id
+                for p_id in range(int(row["expected_ranks"]))
+            }
+            if rank_streams & streams:
+                manifest_issues.append(
+                    f"{ensemble} manifest has overlapping seed+pID MPI rank streams"
+                )
+                break
+            rank_streams.update(streams)
     all_rows: list[dict[str, object]] = []
     density_rows: list[dict[str, object]] = []
     missing: list[dict[str, object]] = []
