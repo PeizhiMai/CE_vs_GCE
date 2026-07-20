@@ -100,6 +100,7 @@ def main()->None:
         probes=read(M/"gce_mu_probe_L6_obc_attractive_from_PBC.tsv")+read(M/"gce_mu_probe_L6_obc_spinHS_from_PBC.tsv")
         probe_accounts={row["out_parent"]:row["account"] for row in probes}
         check(all(probe_accounts.get(row["root"])==row["account"] for row in overrides),"generated probe manifests preserve user-directed account overrides")
+        check(all(row["project_commit"]==commit and row["smoqydqmc_version"]=="2.0.12" and row["smoqydqmc_commit"]==EXPECTED_SMOQ for row in probes),"generated probe manifests pin current project and OBC dependency commits")
 
     exact=load_exact();g2=exact.build_geometry(2,2);g3=exact.build_geometry(3,3);g6=exact.build_geometry(6,6)
     check((len(g2.nn_bonds),len(g2.nnn_bonds))==(4,2),"2x2 OBC geometry has 4 NN and 2 NNN bonds")

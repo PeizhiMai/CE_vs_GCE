@@ -201,6 +201,22 @@ def main() -> None:
         frozen[k] = candidate
         imported += 1
     references = [frozen[k] for k in sorted(frozen)]
+    # The frozen object is authoritative for the imported chemical potential,
+    # but deployment provenance must follow the current OBC target manifest.
+    # This matters when a wrapper-only project commit is deployed after the
+    # PBC chemical potentials were first frozen: new probe jobs must pin the
+    # commit that they will actually execute, not the older freeze-time commit.
+    provenance_keys = {
+        "boundary", "project_commit", "smoqydqmc_version", "smoqydqmc_commit",
+        "canensafqmc_base_commit", "canensafqmc_current_patch_sha256",
+        "canensafqmc_obc_patch_sha256", "site_count", "nn_bond_count",
+        "nnn_bond_count", "kinetic_normalization", "double_occupancy_normalization",
+        "nn_normalization", "nnn_normalization",
+    }
+    for reference in references:
+        target = targets[key(reference["U"], reference["Ntot_target"], reference["beta"])]
+        for name in provenance_keys:
+            reference[name] = target[name]
     for idx, row in enumerate(references):
         row["idx"] = idx
     write(existing_path, references)
