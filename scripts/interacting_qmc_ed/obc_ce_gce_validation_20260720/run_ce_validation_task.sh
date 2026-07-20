@@ -41,7 +41,7 @@ strict_final() {
   [[ "${count}" -eq "${EXPECTED_RANKS}" ]] || return 1
   for f in "${required[@]}"; do [[ -s "${OUTDIR}/${f}" ]] || return 1; done
   python3 - "${OUTDIR}" "${EXPECTED_RANKS}" "${MANIFEST}" "${TASK_ID}" <<'PY'
-import csv,pathlib,sys,tomllib
+import csv,pathlib,sys
 root=pathlib.Path(sys.argv[1]); expected=int(sys.argv[2])
 manifest=list(csv.DictReader(open(sys.argv[3]),delimiter="\t")); row=manifest[int(sys.argv[4])]
 for name in ("equal_time_kinetic_per_site_qmc.tsv","equal_time_double_occupancy_per_site_qmc.tsv",
@@ -53,8 +53,8 @@ if pair_estimator:
     metadata=sorted(root.glob("ranks/rank_*/metadata.toml"))
     assert len(metadata)==expected
     for path in metadata:
-        document=tomllib.loads(path.read_text())
-        assert document["equal_time"]["obc_same_spin_estimator"]==pair_estimator
+        needle='obc_same_spin_estimator = "{}"'.format(pair_estimator)
+        assert needle in path.read_text()
 PY
 }
 if strict_final; then echo "[$(date -Is)] already strict-final ${RUN_ID}"; exit 0; fi
