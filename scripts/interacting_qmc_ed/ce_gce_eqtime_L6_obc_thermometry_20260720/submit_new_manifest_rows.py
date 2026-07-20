@@ -81,9 +81,8 @@ def main() -> None:
             raise SystemExit(f"{manifest}: row not on burst/default: {root}")
 
     accounts = {row.get("account", "ccsd") for row in rows}
-    if len(accounts) != 1 or not accounts <= {"ccsd", "cnms"}:
+    if not accounts or not accounts <= {"ccsd", "cnms"}:
         raise SystemExit(f"{manifest}: mixed or invalid accounts {sorted(accounts)}")
-    account = next(iter(accounts))
     ledger_rows = read(args.ledger) if args.ledger.is_file() else []
     submitted = {row["root"] for row in ledger_rows}
     delta: list[dict[str, str]] = []
@@ -96,41 +95,50 @@ def main() -> None:
         delta.append(dict(row)); source_indices.append(source_idx)
     if not delta:
         print(f"NO_NEW_ROWS {manifest}"); return
-    for idx, row in enumerate(delta):
-        row["idx"] = str(idx)
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-    delta_path = HERE / "status_source" / "submission_manifests" / f"{manifest.stem}_delta_{stamp}.tsv"
-    write(delta_path, delta, delta[0].keys())
-    command = [
-        "sbatch", "--parsable", "-A", account, "-p", "burst", "--qos=default",
-        f"--job-name={args.job_name}", f"--array=0-{len(delta)-1}", str(wrapper),
-    ]
-    print("SUBMIT", " ".join(command), f"MANIFEST={delta_path}")
-    if args.dry_run:
-        return
-    env = dict(os.environ)
-    env.update({
-        "MANIFEST": str(delta_path),
-        "CHECKPOINT_RESET_ACCUMULATORS": "false",
-        "AUTO_RESUBMIT": "true",
-    })
-    job_id = subprocess.check_output(command, text=True, env=env).strip().split(";")[0]
-    now = dt.datetime.now(dt.timezone.utc).isoformat()
-    additions: list[dict[str, str]] = []
-    for task, (source_idx, row) in enumerate(zip(source_indices, delta)):
-        root = Path(row[args.root_field]); root.mkdir(parents=True, exist_ok=True)
-        (root / ".l6_obc_submission_jobid").write_text(
-            f"job_id={job_id}\narray_task={task}\nsource_row={source_idx}\n"
-            f"source_manifest={manifest}\ndelta_manifest={delta_path}\n"
+    grouped: dict[str, list[tuple[int, dict[str, str]]]] = {}
+    for source_idx, row in zip(source_indices, delta):
+        grouped.setdefault(row.get("account", "ccsd"), []).append((source_idx, row))
+    for account in sorted(grouped):
+        group = grouped[account]
+        group_rows = [dict(row) for _, row in group]
+        for idx, row in enumerate(group_rows):
+            row["idx"] = str(idx)
+        delta_path = HERE / "status_source" / "submission_manifests" / (
+            f"{manifest.stem}_{account}_delta_{stamp}.tsv"
         )
-        additions.append({
-            "timestamp_utc": now, "source_manifest": str(manifest),
-            "delta_manifest": str(delta_path), "root": str(root), "job_id": job_id,
-            "array_task": str(task), "job_name": args.job_name, "wrapper": str(wrapper),
-            "account": account, "partition": "burst", "qos": "default",
+        write(delta_path, group_rows, group_rows[0].keys())
+        command = [
+            "sbatch", "--parsable", "-A", account, "-p", "burst", "--qos=default",
+            f"--job-name={args.job_name}", f"--array=0-{len(group_rows)-1}", str(wrapper),
+        ]
+        print("SUBMIT", " ".join(command), f"MANIFEST={delta_path}")
+        if args.dry_run:
+            continue
+        env = dict(os.environ)
+        env.update({
+            "MANIFEST": str(delta_path),
+            "CHECKPOINT_RESET_ACCUMULATORS": "false",
+            "AUTO_RESUBMIT": "true",
         })
-    write(args.ledger, ledger_rows + additions, LEDGER_FIELDS)
-    print(f"SUBMITTED job={job_id} rows={len(delta)} array=0-{len(delta)-1} account={account} unthrottled=true")
+        job_id = subprocess.check_output(command, text=True, env=env).strip().split(";")[0]
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        additions: list[dict[str, str]] = []
+        for task, ((source_idx, _), row) in enumerate(zip(group, group_rows)):
+            root = Path(row[args.root_field]); root.mkdir(parents=True, exist_ok=True)
+            (root / ".l6_obc_submission_jobid").write_text(
+                f"job_id={job_id}\narray_task={task}\nsource_row={source_idx}\n"
+                f"source_manifest={manifest}\ndelta_manifest={delta_path}\naccount={account}\n"
+            )
+            additions.append({
+                "timestamp_utc": now, "source_manifest": str(manifest),
+                "delta_manifest": str(delta_path), "root": str(root), "job_id": job_id,
+                "array_task": str(task), "job_name": args.job_name, "wrapper": str(wrapper),
+                "account": account, "partition": "burst", "qos": "default",
+            })
+        ledger_rows.extend(additions)
+        write(args.ledger, ledger_rows, LEDGER_FIELDS)
+        print(f"SUBMITTED job={job_id} rows={len(group_rows)} array=0-{len(group_rows)-1} account={account} unthrottled=true")
 
 
 if __name__ == "__main__":
