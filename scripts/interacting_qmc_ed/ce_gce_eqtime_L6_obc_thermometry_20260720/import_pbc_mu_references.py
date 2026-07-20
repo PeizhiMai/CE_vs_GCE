@@ -14,6 +14,7 @@ MANIFESTS = HERE / "manifests"
 DEFAULT_PBC = Path("/home/9pm/nUHubbard/scripts/interacting_qmc_ed/ce_gce_eqtime_L6_thermometry_20260719/manifests")
 REMOTE_RUNS = Path("/home/9pm/nUHubbard_obc_runs")
 WORKFLOW_TAG = "20260720"
+ACCOUNT_OVERRIDE_PATH = HERE / "status_source" / "account_moves" / "active_account_overrides.tsv"
 
 
 def read(path: Path) -> list[dict[str, str]]:
@@ -36,6 +37,23 @@ def write(path: Path, rows: list[dict[str, object]]) -> None:
         writer = csv.DictWriter(handle, delimiter="\t", fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def load_account_overrides(path: Path = ACCOUNT_OVERRIDE_PATH) -> dict[str, str]:
+    """Load user-directed per-root account moves without changing physics roots."""
+    overrides: dict[str, str] = {}
+    for row in read(path):
+        root = row.get("root", "")
+        account = row.get("account", "")
+        if not root or "_obc_" not in root:
+            raise ValueError(f"invalid OBC account-override root in {path}: {root!r}")
+        if account not in {"ccsd", "cnms"}:
+            raise ValueError(f"invalid account override in {path}: {account!r}")
+        prior = overrides.get(root)
+        if prior is not None and prior != account:
+            raise ValueError(f"conflicting account overrides for {root}: {prior} versus {account}")
+        overrides[root] = account
+    return overrides
 
 
 def stable_int(label: str, base: int) -> int:
@@ -187,6 +205,15 @@ def main() -> None:
         row["idx"] = idx
     write(existing_path, references)
     probes = [probe for reference in references for probe in probe_rows(reference)]
+    overrides = load_account_overrides()
+    known_roots = {str(probe["out_parent"]) for probe in probes}
+    unknown = sorted(set(overrides) - known_roots)
+    if unknown:
+        raise ValueError(f"account overrides do not map to current OBC probes: {unknown[:3]}")
+    for probe in probes:
+        root = str(probe["out_parent"])
+        if root in overrides:
+            probe["account"] = overrides[root]
     families = {
         "attractive": [r for r in probes if r["family"] == "attractive"],
         "spinHS": [r for r in probes if r["family"] == "spinHS"],
@@ -197,6 +224,7 @@ def main() -> None:
         write(args.manifest_dir / f"gce_mu_probe_L6_obc_{family}_from_PBC.tsv", rows)
     print(f"confirmed PBC references available={len(references)}/152 newly_imported={imported}")
     print(f"OBC initial probes attractive={len(families['attractive'])} spinHS={len(families['spinHS'])}")
+    print(f"active per-root account overrides applied={len(overrides)}")
 
 
 if __name__ == "__main__":

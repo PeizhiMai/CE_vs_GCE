@@ -92,6 +92,15 @@ def main()->None:
         check(all(row["pbc_tuning_status"]=="confirmed_within_abs_N_0p03" for row in imported),"only confirmed PBC chemical potentials are imported")
         check(all(row["pbc_reference_manifest_sha256"] for row in imported),"every imported PBC seed has manifest SHA256 provenance")
 
+    override_path=HERE/"status_source"/"account_moves"/"active_account_overrides.tsv"
+    if override_path.is_file():
+        overrides=read(override_path); roots=[row["root"] for row in overrides]
+        check(len(roots)==len(set(roots)),"account overrides have unique roots")
+        check(all(row["account"] in {"ccsd","cnms"} and "_obc_" in row["root"] for row in overrides),"account overrides are valid OBC ccsd/cnms records")
+        probes=read(M/"gce_mu_probe_L6_obc_attractive_from_PBC.tsv")+read(M/"gce_mu_probe_L6_obc_spinHS_from_PBC.tsv")
+        probe_accounts={row["out_parent"]:row["account"] for row in probes}
+        check(all(probe_accounts.get(row["root"])==row["account"] for row in overrides),"generated probe manifests preserve user-directed account overrides")
+
     exact=load_exact();g2=exact.build_geometry(2,2);g3=exact.build_geometry(3,3);g6=exact.build_geometry(6,6)
     check((len(g2.nn_bonds),len(g2.nnn_bonds))==(4,2),"2x2 OBC geometry has 4 NN and 2 NNN bonds")
     check((len(g3.nn_bonds),len(g3.nnn_bonds))==(12,8),"3x3 OBC geometry has 12 NN and 8 NNN bonds")

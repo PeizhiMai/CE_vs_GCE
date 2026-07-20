@@ -86,6 +86,10 @@ condition is sign-limited.
   checkpoints.
 - `checkpoint_reset_accumulators=false` for every fresh and resumed leg.
 - Continuations and repairs preserve account/partition/QOS and exact resources.
+- User-directed pending-task moves are recorded in
+  `status_source/account_moves/active_account_overrides.tsv`; subsequent
+  hourly imports preserve the destination account for those exact roots and
+  their continuations.
 - `repair_stale_l6_roots.py` repairs a root only when it is required,
   non-final, has fresh full checkpoints/statuses, and has no active or pending
   leg.  Queue/root mapping is ledger based and fails closed on unknown jobs,
