@@ -105,11 +105,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--measurements-per-rank", type=int, default=10000)
     parser.add_argument("--measurement-interval", type=int, default=3)
     parser.add_argument("--base-seed", type=int, default=2026072000)
+    parser.add_argument(
+        "--run-tag",
+        default="",
+        help="Optional filesystem-safe suffix for a fresh corrective validation generation.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.run_tag and not args.run_tag.replace("_", "").isalnum():
+        raise ValueError("run-tag may contain only letters, digits, and underscores")
     provenance = dependency_provenance()
     if args.measurements_per_rank % 100:
         raise ValueError("measurements-per-rank must be divisible by 100")
@@ -153,6 +160,8 @@ def main() -> None:
                                 f"L{L}_U{token(U)}_b{token(beta)}_N{target_n}_"
                                 f"dt{token(dtau)}_seed{seed_index}"
                             )
+                            if args.run_tag:
+                                stem = f"{stem}_{args.run_tag}"
                             common: dict[str, object] = {
                                 "condition_index": condition_index,
                                 "L": L,
@@ -193,6 +202,7 @@ def main() -> None:
                                 **common,
                                 "phase_reweighted": str(U > 0).lower(),
                                 "force_symmetry": str(U <= 0).lower(),
+                                "ce_same_spin_estimator": "CanEnsAFQMC canonical two-body RDM rho2 per physical bond; never Wick-contract the projected one-body RDM",
                                 "outdir": f"{args.run_root}/ce/ce_obc_{stem}",
                                 "ed_reference_file": str(ce_reference_path),
                                 "ed_reference_sha256": ce_reference_sha256,
@@ -251,6 +261,7 @@ def main() -> None:
         "warmups": args.warmups,
         "measurements_per_rank": args.measurements_per_rank,
         "run_root": args.run_root,
+        "run_tag": args.run_tag,
         "ed_reference_dir": str(args.ed_dir),
         "ce_ed_reference_sha256": ce_reference_sha256,
         "gce_ed_reference_sha256": gce_reference_sha256,

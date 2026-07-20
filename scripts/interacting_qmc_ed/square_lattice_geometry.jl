@@ -164,13 +164,26 @@ end
     return rho[i, i] * rho[j, j] - rho[i, j] * rho[j, i]
 end
 
-function _bond_observables(rho_up, rho_dn, bonds)
+function _bond_observables(
+    rho_up,
+    rho_dn,
+    bonds;
+    same_spin_pair_up=nothing,
+    same_spin_pair_dn=nothing,
+)
     isempty(bonds) && return (spin=NaN, charge_raw=NaN)
     spin = zero(promote_type(eltype(rho_up), eltype(rho_dn)))
     charge = zero(spin)
     for (i, j) in bonds
-        upup = _same_spin_density_pair(rho_up, i, j)
-        dndn = _same_spin_density_pair(rho_dn, i, j)
+        # A grand-canonical determinant obeys the usual Wick contraction of
+        # its one-body density matrix.  A number-projected canonical
+        # determinant does not: its same-spin pair density must be evaluated
+        # with the canonical two-body RDM.  CE callers therefore provide the
+        # two callbacks below, while GCE retains the allocation-free Wick path.
+        upup = isnothing(same_spin_pair_up) ?
+            _same_spin_density_pair(rho_up, i, j) : same_spin_pair_up(i, j)
+        dndn = isnothing(same_spin_pair_dn) ?
+            _same_spin_density_pair(rho_dn, i, j) : same_spin_pair_dn(i, j)
         updn = rho_up[i, i] * rho_dn[j, j]
         dnup = rho_dn[i, i] * rho_up[j, j]
         spin += upup + dndn - updn - dnup
@@ -189,6 +202,10 @@ thermometry convention. The returned charge values are raw pair averages;
 `*_charge_connected` subtracts the product of ensemble site means when
 `mean_density_up/dn` are supplied and otherwise subtracts the current density
 matrix site means. Production pooling should supply the ensemble means.
+
+Grand-canonical callers use the default Wick same-spin contraction. Canonical
+callers must supply `same_spin_pair_up/dn` callbacks backed by the projected
+two-body RDM; Wick-contracting a number-projected one-body RDM is incorrect.
 """
 function measure_equal_time_observables(
     geometry::SquareGeometry,
@@ -197,6 +214,8 @@ function measure_equal_time_observables(
     U::Real=0.0,
     mean_density_up=nothing,
     mean_density_dn=nothing,
+    same_spin_pair_up=nothing,
+    same_spin_pair_dn=nothing,
 )
     n = geometry.nsites
     size(rho_up) == (n, n) || throw(DimensionMismatch("rho_up does not match geometry"))
@@ -207,8 +226,16 @@ function measure_equal_time_observables(
     density = sum(nup_site .+ ndn_site) / n
     kinetic = real(sum(geometry.hopping .* (rho_up .+ rho_dn))) / n
     interaction = U * docc
-    nn = _bond_observables(rho_up, rho_dn, geometry.nn_bonds)
-    nnn = _bond_observables(rho_up, rho_dn, geometry.nnn_bonds)
+    nn = _bond_observables(
+        rho_up, rho_dn, geometry.nn_bonds;
+        same_spin_pair_up=same_spin_pair_up,
+        same_spin_pair_dn=same_spin_pair_dn,
+    )
+    nnn = _bond_observables(
+        rho_up, rho_dn, geometry.nnn_bonds;
+        same_spin_pair_up=same_spin_pair_up,
+        same_spin_pair_dn=same_spin_pair_dn,
+    )
 
     mean_up = isnothing(mean_density_up) ? nup_site : mean_density_up
     mean_dn = isnothing(mean_density_dn) ? ndn_site : mean_density_dn

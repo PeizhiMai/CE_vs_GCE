@@ -20,6 +20,9 @@ checkpoint, rank-coverage, and three-sigma extrapolation gates all pass.
 The four acceptance observables are kinetic energy/site, double
 occupancy/site, NN spin `(n_up-n_dn)_i(n_up-n_dn)_j`, and NN connected charge.
 Every bond estimator is averaged over existing undirected physical bonds.
+For CE, the same-spin pair term is evaluated with CanEnsAFQMC's canonical
+two-body RDM. A Wick contraction of the already number-projected one-body RDM
+is mathematically invalid and is rejected by estimator provenance checks.
 
 ## ED oracle
 
@@ -84,12 +87,21 @@ sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_ce_validati
 sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_gce_validation_cades.sbatch
 ```
 
+The first CE validation generation exposed the projected-1-RDM Wick error.
+Those CE roots are retained as failed diagnostics and are never resumed or
+accepted. The fresh corrective CE generation is
+`manifests_ce_rdm2_fix1/ce_validation_manifest.tsv`, submitted with:
+
+```bash
+sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_ce_validation_rdm2_fix1_cades.sbatch
+```
+
 ## Acceptance analysis
 
 ```bash
 ~/.venvs/myenv/bin/python \
   scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/analyze_validation.py \
-  --ce-manifest scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/manifests/ce_validation_manifest.tsv \
+  --ce-manifest scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/manifests_ce_rdm2_fix1/ce_validation_manifest.tsv \
   --gce-manifest scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/manifests/gce_validation_manifest.tsv \
   --outdir results/interacting_qmc_ed/obc_ce_gce_validation_analysis_20260720 \
   --require-complete
@@ -100,3 +112,9 @@ primary tables, combines the two seed replicates, performs weighted linear
 fits in `dtau^2`, and requires every zero-step intercept to agree with ED
 within three combined standard errors. It also fails on numerical-zero phase,
 dependency drift, or hidden translational/unequal-time output.
+
+Finite-time-step GCE densities are retained rather than rejected point by
+point: an ED-tuned chemical potential can have an expected `O(dtau^2)` density
+shift. The analyzer pools rank signed-numerator/phase-denominator accumulators,
+fits achieved `N` versus `dtau^2`, and requires the zero-step result to satisfy
+the ED tuning tolerance or three-sigma uncertainty, whichever is wider.

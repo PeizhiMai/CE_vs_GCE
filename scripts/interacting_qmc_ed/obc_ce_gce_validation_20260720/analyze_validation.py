@@ -71,6 +71,50 @@ def one_row(path: Path) -> dict[str, str]:
     return rows[0]
 
 
+def rank_ratio_jackknife(
+    data_dir: Path, name: str, *, scale: float = 1.0
+) -> tuple[float, float]:
+    """Pool signed rank accumulators and jackknife their ratio.
+
+    The finite-dtau achieved density is a diagnostic, not a per-run rejection
+    criterion: an ED-tuned chemical potential generally acquires an O(dtau^2)
+    density shift.  This helper supplies the uncertainty needed to extrapolate
+    that shift to zero time step.
+    """
+    rank_rows: list[tuple[complex, complex]] = []
+    for path in sorted(data_dir.glob("obc_equal_time_rank_pID-*.tsv")):
+        matches = [row for row in read_tsv(path) if row["name"] == name]
+        if len(matches) != 1:
+            raise RuntimeError(f"expected one {name!r} accumulator in {path}")
+        row = matches[0]
+        phase = complex(float(row["phase_sum_real"]), float(row["phase_sum_imag"]))
+        signed = complex(float(row["signed_sum_real"]), float(row["signed_sum_imag"]))
+        rank_rows.append((phase, signed))
+    if not rank_rows:
+        raise RuntimeError(f"no rank accumulators below {data_dir}")
+    phase_total = sum((phase for phase, _ in rank_rows), 0j)
+    signed_total = sum((signed for _, signed in rank_rows), 0j)
+    if abs(phase_total) <= 100 * np.finfo(float).eps:
+        raise RuntimeError("numerical-zero global phase in rank accumulator")
+    ratio = signed_total / phase_total
+    if abs(ratio.imag) > 1e-8 * max(1.0, abs(ratio.real)):
+        raise RuntimeError(f"non-negligible imaginary pooled {name} ratio: {ratio}")
+    value = float(ratio.real * scale)
+    if len(rank_rows) == 1:
+        return value, math.nan
+    leave_one = []
+    for phase, signed in rank_rows:
+        denominator = phase_total - phase
+        if abs(denominator) <= 100 * np.finfo(float).eps:
+            raise RuntimeError("numerical-zero leave-one-rank phase denominator")
+        leave_one.append(float(((signed_total - signed) / denominator).real * scale))
+    samples = np.asarray(leave_one)
+    error = math.sqrt(
+        (len(samples) - 1) / len(samples) * float(np.sum((samples - np.mean(samples)) ** 2))
+    )
+    return value, error
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -104,6 +148,7 @@ def audit_ce(
         metadata = tomllib.loads(metadata_path.read_text())
         dependencies = metadata.get("dependencies", {})
         lattice = metadata.get("lattice", {})
+        equal_time = metadata.get("equal_time", {})
         if lattice.get("boundary") != "open":
             issues.append(f"non-OBC metadata in {rank_dir}")
         for field in ("site_count", "nn_bond_count", "nnn_bond_count"):
@@ -128,6 +173,11 @@ def audit_ce(
         ):
             if dependencies.get(field) != row[field]:
                 issues.append(f"CE dependency {field} mismatch in {rank_dir}")
+        expected_pair_estimator = row.get("ce_same_spin_estimator", "")
+        if expected_pair_estimator and (
+            equal_time.get("obc_same_spin_estimator") != expected_pair_estimator
+        ):
+            issues.append(f"CE canonical pair-estimator provenance mismatch in {rank_dir}")
     if any(data_dir.glob("equal_time_charge_spin_wedge_qmc.tsv")):
         issues.append("translational CE correlation output found under OBC")
     return not issues, issues
@@ -184,8 +234,13 @@ def audit_gce(
 
 def collect_rows(
     manifest_path: Path, args: argparse.Namespace
-) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+) -> tuple[
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
     collected: list[dict[str, object]] = []
+    density_rows: list[dict[str, object]] = []
     missing: list[dict[str, object]] = []
     for row in read_tsv(manifest_path):
         expected_ranks = int(row["expected_ranks"])
@@ -261,18 +316,37 @@ def collect_rows(
                 issues.append(f"{filename} has numerical-zero phase")
             values[observable] = (float(primary["value"]), float(primary["stderr"]))
         achieved_n = float(row["target_N"])
+        achieved_n_stderr = 0.0
         if row["ensemble"] == "GCE":
+            density_tolerance = float(row.get("density_tolerance", "0.01"))
+            ed_density_error = abs(
+                float(row.get("ed_achieved_N", "nan")) - float(row["target_N"])
+            )
+            if not math.isfinite(ed_density_error) or ed_density_error > density_tolerance:
+                issues.append(
+                    "ED-tuned GCE chemical potential misses target density "
+                    f"by {ed_density_error} > {density_tolerance}"
+                )
             density_path = data_dir / "equal_time_observables_obc_qmc.tsv"
             if density_path.is_file():
                 density = one_row(density_path)
                 achieved_n = float(density["achieved_N"])
-                density_tolerance = float(row.get("density_tolerance", "0.01"))
-                density_error = abs(achieved_n - float(row["target_N"]))
-                if density_error > density_tolerance:
+                try:
+                    pooled_n, achieved_n_stderr = rank_ratio_jackknife(
+                        data_dir, "density", scale=float(row["site_count"])
+                    )
+                except (KeyError, RuntimeError, ValueError) as error:
+                    issues.append(f"cannot pool GCE achieved N: {error}")
+                else:
+                    if not math.isclose(
+                        pooled_n, achieved_n, rel_tol=1e-10, abs_tol=1e-10
+                    ):
+                        issues.append(
+                            f"GCE achieved-N pooled/table mismatch {pooled_n} vs {achieved_n}"
+                        )
+                if not math.isfinite(achieved_n):
                     issues.append(
-                        "GCE achieved-density mismatch "
-                        f"|{achieved_n}-{row['target_N']}|={density_error} "
-                        f"> {density_tolerance}"
+                        f"non-finite GCE achieved N in {density_path}"
                     )
             else:
                 issues.append("missing GCE achieved-N table")
@@ -311,7 +385,28 @@ def collect_rows(
                     "run_id": row["run_id"],
                 }
             )
-    return collected, missing
+        if row["ensemble"] == "GCE":
+            density_rows.append(
+                {
+                    "ensemble": row["ensemble"],
+                    "L": int(row["L"]),
+                    "U": float(row["U"]),
+                    "beta": float(row["beta"]),
+                    "nup": int(row["nup"]),
+                    "ndn": int(row["ndn"]),
+                    "target_N": int(row["target_N"]),
+                    "dtau": float(row["dtau"]),
+                    "seed_index": int(row["seed_index"]),
+                    "observable": "achieved_N",
+                    "value": achieved_n,
+                    "stderr": achieved_n_stderr,
+                    "ed_value": float(row["ed_achieved_N"]),
+                    "density_tolerance": float(row.get("density_tolerance", "0.01")),
+                    "delta_N": achieved_n - float(row["target_N"]),
+                    "run_id": row["run_id"],
+                }
+            )
+    return collected, density_rows, missing
 
 
 def combine_seed_rows(rows: list[dict[str, object]]) -> tuple[float, float]:
@@ -366,10 +461,12 @@ def main() -> None:
         if len({row[root_field] for row in rows}) != len(rows):
             manifest_issues.append(f"{ensemble} manifest has duplicate run roots")
     all_rows: list[dict[str, object]] = []
+    density_rows: list[dict[str, object]] = []
     missing: list[dict[str, object]] = []
     for manifest in (args.ce_manifest, args.gce_manifest):
-        collected, absent = collect_rows(manifest, args)
+        collected, densities, absent = collect_rows(manifest, args)
         all_rows.extend(collected)
+        density_rows.extend(densities)
         missing.extend(absent)
 
     seed_groups: dict[tuple[object, ...], list[dict[str, object]]] = defaultdict(list)
@@ -461,11 +558,95 @@ def main() -> None:
             }
         )
 
+    density_seed_groups: dict[tuple[object, ...], list[dict[str, object]]] = defaultdict(list)
+    for row in density_rows:
+        key = tuple(
+            row[column]
+            for column in ("L", "U", "beta", "nup", "ndn", "target_N", "dtau")
+        )
+        density_seed_groups[key].append(row)
+
+    density_dtau_rows: list[dict[str, object]] = []
+    for key, rows in sorted(
+        density_seed_groups.items(), key=lambda item: tuple(map(str, item[0]))
+    ):
+        if len(rows) != 2 or {int(row["seed_index"]) for row in rows} != {0, 1}:
+            continue
+        mean, stderr = combine_seed_rows(rows)
+        density_dtau_rows.append(
+            {
+                "ensemble": "GCE",
+                "L": key[0],
+                "U": key[1],
+                "beta": key[2],
+                "nup": key[3],
+                "ndn": key[4],
+                "target_N": key[5],
+                "dtau": key[6],
+                "achieved_N": mean,
+                "achieved_N_stderr": stderr,
+                "delta_N": mean - float(key[5]),
+                "density_tolerance": rows[0]["density_tolerance"],
+                "seed_replicates": 2,
+            }
+        )
+
+    density_fit_groups: dict[tuple[object, ...], list[dict[str, object]]] = defaultdict(list)
+    for row in density_dtau_rows:
+        key = tuple(
+            row[column]
+            for column in ("L", "U", "beta", "nup", "ndn", "target_N")
+        )
+        density_fit_groups[key].append(row)
+
+    density_extrapolations: list[dict[str, object]] = []
+    for key, rows in sorted(
+        density_fit_groups.items(), key=lambda item: tuple(map(str, item[0]))
+    ):
+        if len(rows) != 3 or {float(row["dtau"]) for row in rows} != {0.2, 0.1, 0.05}:
+            continue
+        fit_rows = [
+            {
+                "dtau": row["dtau"],
+                "value": row["achieved_N"],
+                "stderr": row["achieved_N_stderr"],
+            }
+            for row in rows
+        ]
+        intercept, intercept_error, slope, reduced_chi2 = fit_dtau_squared(fit_rows)
+        target = float(key[5])
+        delta = intercept - target
+        tolerance = float(rows[0]["density_tolerance"])
+        threshold = max(tolerance, 3.0 * max(intercept_error, 1e-12))
+        density_extrapolations.append(
+            {
+                "ensemble": "GCE",
+                "L": key[0],
+                "U": key[1],
+                "beta": key[2],
+                "nup": key[3],
+                "ndn": key[4],
+                "target_N": key[5],
+                "qmc_achieved_N_dtau2_to_zero": intercept,
+                "qmc_intercept_stderr": intercept_error,
+                "qmc_minus_target_N": delta,
+                "density_tolerance": tolerance,
+                "three_sigma": 3.0 * max(intercept_error, 1e-12),
+                "acceptance_threshold": threshold,
+                "slope_dtau2": slope,
+                "reduced_chi2": reduced_chi2,
+                "passed_density_gate": abs(delta) <= threshold,
+            }
+        )
+
     args.outdir.mkdir(parents=True, exist_ok=True)
     write_tsv(args.outdir / "run_observables.tsv", all_rows)
+    write_tsv(args.outdir / "gce_density_run_diagnostics.tsv", density_rows)
     write_tsv(args.outdir / "missing_or_invalid_runs.tsv", missing)
     write_tsv(args.outdir / "seed_combined_dtau.tsv", dtau_rows)
     write_tsv(args.outdir / "dtau2_extrapolation_vs_ed.tsv", extrapolations)
+    write_tsv(args.outdir / "gce_density_seed_combined_dtau.tsv", density_dtau_rows)
+    write_tsv(args.outdir / "gce_density_dtau2_extrapolation.tsv", density_extrapolations)
     expected_runs = 144
     expected_fits = 2 * 12 * len(PRIMARY_FILES)
     summary = {
@@ -476,6 +657,15 @@ def main() -> None:
         "expected_extrapolations": expected_fits,
         "completed_extrapolations": len(extrapolations),
         "failed_3sigma": sum(not bool(row["passed_3sigma"]) for row in extrapolations),
+        "expected_gce_density_extrapolations": 12,
+        "completed_gce_density_extrapolations": len(density_extrapolations),
+        "failed_gce_density_gates": sum(
+            not bool(row["passed_density_gate"]) for row in density_extrapolations
+        ),
+        "finite_dtau_gce_rows_outside_density_tolerance": sum(
+            abs(float(row["delta_N"])) > float(row["density_tolerance"])
+            for row in density_rows
+        ),
         "all_four_primary_observables": list(PRIMARY_FILES),
         "manifest_issues": manifest_issues,
     }
@@ -485,6 +675,8 @@ def main() -> None:
         and not missing
         and len(extrapolations) == expected_fits
         and summary["failed_3sigma"] == 0
+        and len(density_extrapolations) == summary["expected_gce_density_extrapolations"]
+        and summary["failed_gce_density_gates"] == 0
     )
     (args.outdir / "validation_summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n"

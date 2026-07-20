@@ -326,6 +326,7 @@ function write_metadata(outdir, params, L, geometry)
             "correlations_enabled" => params["measure_equal_time_correlations"],
             "correlation_files" => "equal_time_charge_spin_wedge_qmc.tsv, equal_time_structure_factors_qmc.tsv, equal_time_neighbor_shells_qmc.tsv",
             "correlation_notes" => "charge and spin equal-time correlations only; no pairing measurements; charge structure factor is also written in connected form C_nn(r)-density^2; spin_s_s uses s=n_up-n_dn and spin_SzSz=spin_s_s/4",
+            "obc_same_spin_estimator" => geometry.boundary === :open ? "CanEnsAFQMC canonical two-body RDM rho2 per physical bond; never Wick-contract the projected one-body RDM" : "not_applicable",
             "obc_direct_bond_file" => geometry.boundary === :open ? "equal_time_bond_observables_qmc.tsv" : "",
             "obc_primary_files" => geometry.boundary === :open ? "equal_time_kinetic_per_site_qmc.tsv, equal_time_double_occupancy_per_site_qmc.tsv, equal_time_nn_spin_qmc.tsv, equal_time_nn_connected_charge_qmc.tsv" : "",
             "phase_reweight" => params["phase_reweight"],
@@ -578,6 +579,19 @@ function measure_ce_equal_time_observables(system, ρup, ρdn; kx_value=nothing)
     docc = sum(real.(diag(ρup.ρ₁) .* diag(ρdn.ρ₁))) / nsites
     kx = kx_value === nothing ? real(ce_measure_KxPerSite(system, ρup, ρdn)) : real(kx_value)
     return (energy[1], energy[2], energy[3], docc, kx)
+end
+
+"""Direct physical-bond CE estimator using the canonical two-body RDM."""
+function measure_ce_obc_bond_observables(geometry, ρup::DensityMatrix, ρdn::DensityMatrix; U::Real=0.0)
+    return SquareLatticeGeometry.measure_equal_time_observables(
+        geometry, ρup.ρ₁, ρdn.ρ₁;
+        U=U,
+        # Number projection invalidates a Wick contraction performed on the
+        # already projected one-body RDM. CanEnsAFQMC.ρ₂ evaluates the exact
+        # canonical same-spin two-body RDM for this HS configuration.
+        same_spin_pair_up=(i, j) -> CanEnsAFQMC.ρ₂(ρup, i, i, j, j),
+        same_spin_pair_dn=(i, j) -> CanEnsAFQMC.ρ₂(ρdn, i, i, j, j),
+    )
 end
 
 function reset_corr_sampler!(sampler::CorrFuncSampler)
@@ -1214,7 +1228,10 @@ function write_metropolis_ratio_diagnostics(
     return path
 end
 
-const CHECKPOINT_VERSION = 3
+# Version 4 changes the OBC same-spin bond accumulators from an invalid Wick
+# contraction of the projected 1-RDM to the canonical two-body RDM. Refuse to
+# mix either semantic in a resumed accumulator.
+const CHECKPOINT_VERSION = 4
 const CHECKPOINT_CORE_PARAM_KEYS = [
     "lx",
     "ly",
@@ -1850,8 +1867,8 @@ function main(args=ARGS)
                 sumsq_equal_time .+= equal_vals .^ 2
                 if measure_equal_time_correlations
                     if direct_obc_bonds
-                        direct = SquareLatticeGeometry.measure_equal_time_observables(
-                            geometry, ρup.ρ₁, ρdn.ρ₁; U=params["u"],
+                        direct = measure_ce_obc_bond_observables(
+                            geometry, ρup, ρdn; U=params["u"],
                         )
                         bond_values = [
                             direct.nn_charge_raw,

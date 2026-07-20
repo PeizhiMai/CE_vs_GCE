@@ -40,13 +40,21 @@ strict_final() {
   count=$(find "${OUTDIR}/ranks" -mindepth 2 -maxdepth 2 -name checkpoint_complete.txt 2>/dev/null | wc -l | tr -d ' ')
   [[ "${count}" -eq "${EXPECTED_RANKS}" ]] || return 1
   for f in "${required[@]}"; do [[ -s "${OUTDIR}/${f}" ]] || return 1; done
-  python3 - "${OUTDIR}" "${EXPECTED_RANKS}" <<'PY'
-import csv,pathlib,sys
+  python3 - "${OUTDIR}" "${EXPECTED_RANKS}" "${MANIFEST}" "${TASK_ID}" <<'PY'
+import csv,pathlib,sys,tomllib
 root=pathlib.Path(sys.argv[1]); expected=int(sys.argv[2])
+manifest=list(csv.DictReader(open(sys.argv[3]),delimiter="\t")); row=manifest[int(sys.argv[4])]
 for name in ("equal_time_kinetic_per_site_qmc.tsv","equal_time_double_occupancy_per_site_qmc.tsv",
              "equal_time_nn_spin_qmc.tsv","equal_time_nn_connected_charge_qmc.tsv"):
     rows=list(csv.DictReader(open(root/name),delimiter="\t"))
     assert len(rows)==1 and rows[0]["boundary"]=="open" and int(rows[0]["nranks"])==expected
+pair_estimator=row.get("ce_same_spin_estimator","")
+if pair_estimator:
+    metadata=sorted(root.glob("ranks/rank_*/metadata.toml"))
+    assert len(metadata)==expected
+    for path in metadata:
+        document=tomllib.loads(path.read_text())
+        assert document["equal_time"]["obc_same_spin_estimator"]==pair_estimator
 PY
 }
 if strict_final; then echo "[$(date -Is)] already strict-final ${RUN_ID}"; exit 0; fi
