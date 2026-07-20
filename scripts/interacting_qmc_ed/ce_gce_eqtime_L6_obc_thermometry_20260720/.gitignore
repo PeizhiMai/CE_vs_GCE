@@ -1,0 +1,6 @@
+__pycache__/
+status_source/
+qa/
+rendered/
+analysis/
+manifests/*.tsv
