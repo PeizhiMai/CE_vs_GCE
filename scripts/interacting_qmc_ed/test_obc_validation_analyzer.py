@@ -68,6 +68,17 @@ class ValidationAnalyzerTests(unittest.TestCase):
         self.assertGreater(error, 0.0)
         self.assertLess(reduced_chi2, 1e-20)
 
+    def test_equal_work_seed_combination_does_not_precision_weight(self) -> None:
+        rows = [
+            {"value": 1.0, "stderr": 0.1},
+            {"value": 3.0, "stderr": 0.4},
+        ]
+        value, error = ANALYZER.combine_seed_rows(rows)
+        within_sem = math.sqrt(0.1**2 + 0.4**2) / 2
+        between_sem = 1.0
+        self.assertAlmostEqual(value, 2.0)
+        self.assertAlmostEqual(error, math.hypot(within_sem, between_sem))
+
 
 if __name__ == "__main__":
     unittest.main()

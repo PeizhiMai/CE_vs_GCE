@@ -129,14 +129,20 @@ CE and 72 unique GCE roots: three `dtau` values and two seeds for each of 12
 physical conditions. GCE chemical potentials come from the ED grand-canonical
 trace and satisfy `|<N>-N_CE| <= 0.01`. The analyzer requires provenance,
 geometry, rank/site coverage, all four primary tables, and no forbidden
-translational output. It combines seeds and fits every observable linearly in
-`dtau^2`; all 96 zero-step intercepts must agree with ED within three standard
-errors.
+translational output. Equal-work independent seed replicates are combined by
+an arithmetic mean, with within-run and between-seed SEMs added in quadrature;
+the resulting points enter weighted linear fits in `dtau^2`. All 96 zero-step
+intercepts must agree with ED within three standard errors.
 
-The generated manifests contain exactly 72 CE and 72 GCE rows with unique
-run IDs and roots. A pre-submission analyzer audit reports the expected 144
-missing QMC runs, zero manifest issues, and zero extrapolations; this is the
-intended state before the CADES validation arrays run.
+The final fresh validation arrays were CADES jobs `5486493` (CE) and `5486494`
+(GCE). They completed 144/144 roots with full four-rank and four-primary-table
+coverage. All 96/96 observable extrapolations and all 12/12 GCE density
+extrapolations passed; the maximum absolute observable discrepancy was
+`2.5124215563` standard errors. Full provenance, Slurm coverage, phase minima,
+superseded-generation notes, and tabulated results are in
+`docs/validation/obc_ce_gce_cades_validation_20260720`.
 
-Full OBC production remains prohibited until the ED reference, CADES smoke,
-and all 144 validation-run/96-extrapolation gates pass.
+The ED reference, PBC regression, package/fork tests, checkpoint-resume smoke,
+and final CADES QMC gates now all pass. OBC production may use only the
+explicitly supported dense Hubbard paths, exact pinned dependencies, and fresh
+`_obc_` roots. PBC or v2.0.11 checkpoints remain incompatible.

@@ -22,6 +22,11 @@ PRIMARY_FILES = {
     "nn_connected_charge": "equal_time_nn_connected_charge_qmc.tsv",
 }
 
+SEED_COMBINATION_POLICY = (
+    "equal-work arithmetic mean; uncertainty is quadrature of propagated "
+    "within-run SEM and between-seed SEM"
+)
+
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
     with path.open(newline="") as handle:
@@ -39,7 +44,9 @@ def write_tsv(path: Path, rows: list[dict[str, object]]) -> None:
             if key not in columns:
                 columns.append(key)
     with path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, delimiter="\t")
+        writer = csv.DictWriter(
+            handle, fieldnames=columns, delimiter="\t", lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(rows)
 
@@ -410,16 +417,26 @@ def collect_rows(
 
 
 def combine_seed_rows(rows: list[dict[str, object]]) -> tuple[float, float]:
+    """Combine independent, equal-work seed replicates without precision bias.
+
+    Every validation replicate has the same rank count, warmup, and measurement
+    count.  Inverse-variance weighting is therefore inappropriate here: with
+    only four ranks per replicate its noisy SEM estimate can give accidental
+    high weight to a statistically quiet seed and shift the central value.
+    Each run has already performed the required global signed-numerator/phase-
+    denominator pooling.  Treat the two run estimates symmetrically and retain
+    both the propagated within-run uncertainty and the observed between-seed
+    spread.
+    """
     values = np.asarray([float(row["value"]) for row in rows])
     errors = np.asarray([float(row["stderr"]) for row in rows])
     finite = np.isfinite(errors) & (errors > 0)
-    if np.any(finite):
-        weights = np.where(finite, 1.0 / np.maximum(errors, 1e-15) ** 2, 0.0)
-        mean = float(np.sum(weights * values) / np.sum(weights))
-        internal_variance = float(1.0 / np.sum(weights))
-    else:
-        mean = float(np.mean(values))
-        internal_variance = 0.0
+    mean = float(np.mean(values))
+    internal_variance = (
+        float(np.sum(errors[finite] ** 2)) / len(values) ** 2
+        if np.any(finite)
+        else 0.0
+    )
     between_sem = float(np.std(values, ddof=1) / math.sqrt(len(values))) if len(values) > 1 else 0.0
     return mean, math.sqrt(internal_variance + between_sem**2)
 
@@ -519,6 +536,7 @@ def main() -> None:
                 "stderr": stderr,
                 "ed_value": rows[0]["ed_value"],
                 "seed_replicates": 2,
+                "seed_combination": SEED_COMBINATION_POLICY,
             }
         )
 
@@ -600,6 +618,7 @@ def main() -> None:
                 "delta_N": mean - float(key[5]),
                 "density_tolerance": rows[0]["density_tolerance"],
                 "seed_replicates": 2,
+                "seed_combination": SEED_COMBINATION_POLICY,
             }
         )
 
@@ -662,7 +681,7 @@ def main() -> None:
     expected_runs = 144
     expected_fits = 2 * 12 * len(PRIMARY_FILES)
     summary = {
-        "schema_version": 1,
+        "schema_version": 2,
         "expected_runs": expected_runs,
         "complete_valid_runs": len(all_rows) // len(PRIMARY_FILES),
         "missing_or_invalid_runs": len(missing),
@@ -679,6 +698,7 @@ def main() -> None:
             for row in density_rows
         ),
         "all_four_primary_observables": list(PRIMARY_FILES),
+        "seed_combination_policy": SEED_COMBINATION_POLICY,
         "manifest_issues": manifest_issues,
     }
     summary["accepted"] = (

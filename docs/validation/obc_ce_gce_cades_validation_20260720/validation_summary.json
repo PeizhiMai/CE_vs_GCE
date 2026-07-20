@@ -1,0 +1,22 @@
+{
+  "accepted": true,
+  "all_four_primary_observables": [
+    "kinetic_per_site",
+    "double_occupancy_per_site",
+    "nn_spin_s_s",
+    "nn_connected_charge"
+  ],
+  "complete_valid_runs": 144,
+  "completed_extrapolations": 96,
+  "completed_gce_density_extrapolations": 12,
+  "expected_extrapolations": 96,
+  "expected_gce_density_extrapolations": 12,
+  "expected_runs": 144,
+  "failed_3sigma": 0,
+  "failed_gce_density_gates": 0,
+  "finite_dtau_gce_rows_outside_density_tolerance": 24,
+  "manifest_issues": [],
+  "missing_or_invalid_runs": 0,
+  "schema_version": 2,
+  "seed_combination_policy": "equal-work arithmetic mean; uncertainty is quadrature of propagated within-run SEM and between-seed SEM"
+}

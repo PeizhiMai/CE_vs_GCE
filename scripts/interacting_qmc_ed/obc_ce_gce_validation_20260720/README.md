@@ -1,8 +1,10 @@
 # CE/GCE OBC validation workflow
 
 This directory implements the `2x2`/`3x3` open-boundary validation gate. It is
-not an OBC production workflow. Production remains forbidden until the ED,
-checkpoint, rank-coverage, and three-sigma extrapolation gates all pass.
+not an OBC production workflow. The final fresh validation generation passed
+the ED, checkpoint, rank-coverage, density, and three-sigma extrapolation
+gates; production must still use the separately documented supported paths
+and fresh roots.
 
 ## Physics matrix
 
@@ -116,13 +118,25 @@ sbatch scripts/interacting_qmc_ed/obc_ce_gce_validation_20260720/job_gce_validat
 ```
 
 The analyzer requires complete rank/site-accumulator coverage and all four
-primary tables, combines the two seed replicates, performs weighted linear
-fits in `dtau^2`, and requires every zero-step intercept to agree with ED
-within three combined standard errors. It also fails on numerical-zero phase,
-dependency drift, or hidden translational/unequal-time output.
+primary tables. Because the two seed replicates have identical work, it gives
+their central estimates equal weight and combines propagated within-run and
+between-seed SEMs in quadrature. It then performs weighted linear fits in
+`dtau^2` and requires every zero-step intercept to agree with ED within three
+combined standard errors. It also fails on numerical-zero phase, dependency
+drift, overlapping `seed+pID` streams, or hidden translational/unequal-time
+output.
 
 Finite-time-step GCE densities are retained rather than rejected point by
 point: an ED-tuned chemical potential can have an expected `O(dtau^2)` density
 shift. The analyzer pools rank signed-numerator/phase-denominator accumulators,
 fits achieved `N` versus `dtau^2`, and requires the zero-step result to satisfy
 the ED tuning tolerance or three-sigma uncertainty, whichever is wider.
+
+## Final result
+
+Fresh CADES arrays `5486493` (CE) and `5486494` (GCE) completed 72/72 tasks
+each on `ccsd/burst/default`, with no continuations or fatal signatures. The
+analyzer accepted 144/144 roots, 96/96 observable extrapolations, and 12/12
+GCE density extrapolations. The maximum absolute observable discrepancy was
+`2.5124215563` standard errors. The complete review record is under
+`docs/validation/obc_ce_gce_cades_validation_20260720`.

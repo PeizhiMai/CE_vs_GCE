@@ -1,0 +1,130 @@
+{
+  "acceptance": {
+    "failed_gce_density_gates": 0,
+    "failed_three_sigma": 0,
+    "finite_dtau_gce_rows_outside_density_tolerance": 24,
+    "gce_density_extrapolations_expected": 12,
+    "gce_density_extrapolations_passed": 12,
+    "maximum_absolute_z_condition": {
+      "L": "2",
+      "U": "3.0",
+      "beta": "5.0",
+      "ensemble": "CE",
+      "ndn": "1",
+      "nup": "1",
+      "observable": "double_occupancy_per_site",
+      "target_N": "2"
+    },
+    "maximum_absolute_z_score": 2.512421556336642,
+    "maximum_absolute_zero_step_density_mismatch": 0.022694953860694866,
+    "minimum_average_phase": {
+      "CE": 0.90315,
+      "GCE": 0.968
+    },
+    "observable_extrapolations_expected": 96,
+    "observable_extrapolations_passed": 96
+  },
+  "accepted": true,
+  "analysis_file_sha256": {
+    "dtau2_extrapolation_vs_ed.tsv": "5c36bd89c164b3afb5a3d0e14683dd01d41d561aca837cbbfbafc6b34056ee02",
+    "gce_density_dtau2_extrapolation.tsv": "37738484a31587d0b59e216de39a7a8346795d07c340e34df36e005422401c6b",
+    "gce_density_run_diagnostics.tsv": "d70d0dc1ecf9ab851c37ec10c004f4e903e4dffaacebab571c6e30e9e3d3b5b3",
+    "gce_density_seed_combined_dtau.tsv": "c537da2e83082edf84ae17634e1d3ff1ebfb73b49f2db7dc9bda1d6e50f58045",
+    "missing_or_invalid_runs.tsv": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "run_observables.tsv": "d78d8b01aa71a9370ca66b5f1f0dfbb180994549c708988aae9f9fa08225ab44",
+    "seed_combined_dtau.tsv": "c8c08ba9932c4d539600b6c8eaaa7133b770b7bc559b634b4333c1b991b19407",
+    "validation_summary.json": "d2a2f5b147da53202bed40b6e5708c70895ebc167a72b0b0a551a8473653ef55"
+  },
+  "boundary": "open",
+  "coverage": {
+    "ce_rank_complete_markers": 288,
+    "ce_roots_complete": 72,
+    "gce_rank_metadata_files": 288,
+    "gce_rank_observable_accumulators": 288,
+    "gce_rank_site_accumulators": 288,
+    "gce_roots_complete": 72,
+    "missing_or_invalid_runs": 0,
+    "primary_tables_per_root": 4,
+    "total_roots_complete": 144
+  },
+  "date": "2026-07-20",
+  "dependencies": {
+    "canensafqmc_base_commit": "21b4f6815d0b836973064ff8401fb2ba9c23b802",
+    "canensafqmc_obc_patch_sha256": "8e65be6f9f9bb010d444b45847b77cf56835b937cec54f62d794b25daf77a4c0",
+    "julia_version": "1.12.1",
+    "smoqydqmc_obc_fork_commit": "c5f0c81bc98029bae585e0cb283428e293553999",
+    "smoqydqmc_upstream_version": "2.0.12"
+  },
+  "lattices": [
+    2,
+    3
+  ],
+  "local_raw_copy": "results/interacting_qmc_ed/obc_ce_gce_validation_independent_rdm2_cades_20260720",
+  "manifest_sha256": {
+    "CE": "4a90320ec7233c8375dab74b3c09b97b12639d80a166799628ade3e5928eb8a4",
+    "GCE": "08651294660fc10895d7a017412c86b110d1bc97b171dc39fe4a0e900f3ddf20"
+  },
+  "remote_run_root": "/home/9pm/nUHubbard_obc_runs/obc_ce_gce_validation_independent_rdm2_20260720",
+  "remote_source_worktree": "/home/9pm/nUHubbard_obc_dev",
+  "runtime_log_audit": {
+    "ce_nonempty_stderr_logs": 0,
+    "continuation_submissions": 0,
+    "fatal_jld2_mpi_wrong_rank_zero_phase_or_drift_signatures": 0,
+    "gce_adaptive_stabilization_warnings": 65,
+    "gce_nonempty_stderr_logs": 72,
+    "gce_stderr_note": "BLAS configuration messages plus nonfatal adaptive stabilization-frequency warnings only"
+  },
+  "slurm": {
+    "CE": {
+      "account": "ccsd",
+      "array": "0-71",
+      "elapsed_seconds_max": 599,
+      "elapsed_seconds_median": 176.5,
+      "elapsed_seconds_min": 80,
+      "exit_codes": [
+        "0:0"
+      ],
+      "job_id": "5486493",
+      "memory_per_task": "20G",
+      "partition": "burst",
+      "qos": "default",
+      "ranks_per_task": 4,
+      "states": [
+        "COMPLETED"
+      ],
+      "tasks": 72
+    },
+    "GCE": {
+      "account": "ccsd",
+      "array": "0-71",
+      "elapsed_seconds_max": 254,
+      "elapsed_seconds_median": 197.0,
+      "elapsed_seconds_min": 153,
+      "exit_codes": [
+        "0:0"
+      ],
+      "job_id": "5486494",
+      "memory_per_task": "20G",
+      "partition": "burst",
+      "qos": "default",
+      "ranks_per_task": 4,
+      "states": [
+        "COMPLETED"
+      ],
+      "tasks": 72
+    }
+  },
+  "statistics": {
+    "independent_seed_replicates": 2,
+    "measurement_interval": 3,
+    "measurements_per_rank": 10000,
+    "rank_stream_overlap_per_ensemble": 0,
+    "rank_streams_per_ensemble": 288,
+    "seed_combination_policy": "equal-work arithmetic mean; uncertainty is quadrature of propagated within-run SEM and between-seed SEM",
+    "warmups_per_rank": 2000
+  },
+  "superseded_generations": [
+    "original validation roots: canonical CE same-spin estimator bug and overlapping seed+pID streams",
+    "short-lived rdm2fix1 CE roots: overlapping seed+pID streams"
+  ]
+}
