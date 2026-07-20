@@ -18,17 +18,28 @@ rows=list(csv.DictReader(open(sys.argv[1]),delimiter="\t")); i=int(sys.argv[2])
 if not 0 <= i < len(rows): raise SystemExit(f"task {i} outside 0..{len(rows)-1}")
 r=rows[i]
 fields=("idx","target_key","family","U_label","U","Ntot_target","target_density","beta","T",
-        "mu_L6_PBC_reference","mu_L8_reference","mu_fitted","mu_final","confirmation_N",
+        "mu_L6_PBC_reference","mu_L8_reference","mu_bracket_low","mu_bracket_high",
+        "mu_fitted","mu_final","confirmation_N",
         "confirmation_N_err","density_tolerance","tuning_status","Lx","Ly","dtau","ntherm",
         "nmeasurements","nbins","nupdates","expected_ranks","account","partition","qos",
         "out_parent","sid","seed","boundary","project_commit","smoqydqmc_version",
         "smoqydqmc_commit","site_count","nn_bond_count","nnn_bond_count")
 missing=[k for k in fields if k not in r]
 if missing: raise SystemExit(f"manifest missing fields {missing}")
+lo,hi=sorted((float(r["mu_bracket_low"]),float(r["mu_bracket_high"])))
+width=hi-lo
+if width > 0.020000000001:
+    raise SystemExit(f"final OBC mu bracket width {width:.12g} exceeds 0.02")
+for name in ("mu_fitted","mu_final"):
+    mu=float(r[name])
+    if not lo-1e-12 <= mu <= hi+1e-12:
+        raise SystemExit(f"{name}={mu:.12g} is outside final bracket [{lo:.12g},{hi:.12g}]")
+if abs(float(r["confirmation_N"])-int(r["Ntot_target"])) > float(r["density_tolerance"])+1e-12:
+    raise SystemExit("confirmation density is outside the required tolerance")
 print("\t".join(r[k] for k in fields))
 PY
 ) || exit $?
-IFS=$'\t' read -r IDX TARGET_KEY FAMILY U_LABEL U NTOT_TARGET TARGET_DENSITY BETA TARGET_T MU_PBC MU_L8 MU_FITTED MU CONF_N CONF_N_ERR DENSITY_TOL TUNING_STATUS LX LY DTAU N_THERM N_MEASUREMENTS N_BINS N_UPDATES EXPECTED_RANKS ACCOUNT PARTITION QOS OUT_PARENT SID BASE_SEED BOUNDARY EXPECTED_PROJECT_COMMIT EXPECTED_SMOQY_VERSION EXPECTED_SMOQY_COMMIT SITE_COUNT NN_COUNT NNN_COUNT <<< "${row}"
+IFS=$'\t' read -r IDX TARGET_KEY FAMILY U_LABEL U NTOT_TARGET TARGET_DENSITY BETA TARGET_T MU_PBC MU_L8 MU_BRACKET_LOW MU_BRACKET_HIGH MU_FITTED MU CONF_N CONF_N_ERR DENSITY_TOL TUNING_STATUS LX LY DTAU N_THERM N_MEASUREMENTS N_BINS N_UPDATES EXPECTED_RANKS ACCOUNT PARTITION QOS OUT_PARENT SID BASE_SEED BOUNDARY EXPECTED_PROJECT_COMMIT EXPECTED_SMOQY_VERSION EXPECTED_SMOQY_COMMIT SITE_COUNT NN_COUNT NNN_COUNT <<< "${row}"
 
 RANKS=${SLURM_NTASKS:-${EXPECTED_RANKS}}
 [[ "${BOUNDARY}" == open && "${OUT_PARENT}" == *"_obc_"* ]] || { echo "OBC boundary/root guard failed" >&2; exit 2; }

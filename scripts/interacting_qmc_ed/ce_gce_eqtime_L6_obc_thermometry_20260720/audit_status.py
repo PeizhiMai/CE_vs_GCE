@@ -86,8 +86,20 @@ def probes(paths: list[Path]) -> dict[str,object]:
 
 
 def production(paths: list[Path]) -> dict[str,object]:
-    rows=unique_rows(paths,"out_parent"); finals=checkpointfull=rankfull=sitefull=tablesfull=densityok=failed=0
+    rows=unique_rows(paths,"out_parent"); finals=checkpointfull=rankfull=sitefull=tablesfull=densityok=failed=bracketok=superseded=0
     for row in rows:
+        bracket_valid=False
+        try:
+            lo,hi=sorted((float(row["mu_bracket_low"]),float(row["mu_bracket_high"])))
+            fitted=float(row["mu_fitted"]); final_mu=float(row["mu_final"])
+            bracket_valid=(
+                hi-lo <= 0.020000000001
+                and lo-1e-12 <= fitted <= hi+1e-12
+                and lo-1e-12 <= final_mu <= hi+1e-12
+            )
+        except (KeyError,ValueError):
+            bracket_valid=False
+        bracketok+=bracket_valid;superseded+=not bracket_valid
         parent=Path(row["out_parent"]); done=parent/f"complete_{base(row,'mu_final')}"; expected=int(row["expected_ranks"])
         run=parent/base(row,"mu_final")
         checkpoints=list(run.glob("checkpoint_pID-*.jld2"))+list(done.glob("checkpoint_pID-*.jld2"))
@@ -99,8 +111,8 @@ def production(paths: list[Path]) -> dict[str,object]:
             try: ok=abs(float(read(achieved)[0]["delta_N"]))<=float(row["density_tolerance"])
             except (IndexError,KeyError,ValueError): pass
         rankfull+=ranks==expected; sitefull+=sites==expected; tablesfull+=tables==4; densityok+=ok; failed+=(parent/"density_tolerance_failed.txt").is_file()
-        finals+=(parent/"dqmc_gce_obc_eqtime_complete.txt").is_file() and ranks==expected and sites==expected and tables==4 and ok
-    return {"rows":len(rows),"final":finals,"checkpoint":checkpointfull,"rank":rankfull,"site":sitefull,"tables":tablesfull,"density":densityok,"density_failed":failed}
+        finals+=(parent/"dqmc_gce_obc_eqtime_complete.txt").is_file() and ranks==expected and sites==expected and tables==4 and ok and bracket_valid
+    return {"rows":len(rows),"final":finals,"checkpoint":checkpointfull,"rank":rankfull,"site":sitefull,"tables":tablesfull,"density":densityok,"density_failed":failed,"bracket_ok":bracketok,"superseded":superseded}
 
 
 def queue() -> Counter:
@@ -174,8 +186,10 @@ def main() -> None:
     status=S/"mu_tuning"/"mu_target_status.tsv"
     if status.is_file(): print("MU_TARGETS",dict(Counter(row["status"] for row in read(status))))
     prod_paths=sorted(M.glob("gce_prod_L6_obc_*_confirmed.tsv"))
+    prod_paths+=sorted((S/"submission_manifests").glob("gce_prod_L6_obc_*_delta_*.tsv"))
+    prod_paths+=sorted((S/"repair_manifests").glob("gceL6O*_repair_*.tsv"))
     x=production(prod_paths)
-    print("GCE_PRODUCTION final={final}/{rows} checkpoint_full={checkpoint}/{rows} rank={rank}/{rows} site={site}/{rows} tables={tables}/{rows} density_ok={density}/{rows} density_failed={density_failed}".format(**x))
+    print("GCE_PRODUCTION final={final}/{rows} checkpoint_full={checkpoint}/{rows} rank={rank}/{rows} site={site}/{rows} tables={tables}/{rows} density_ok={density}/{rows} density_failed={density_failed} bracket_ok={bracket_ok}/{rows} superseded_bad_bracket={superseded}".format(**x))
     for key,count in sorted(queue().items()):
         print(f"QUEUE count={count} state={key[0]} name={key[1]} account={key[2]} partition={key[3]} qos={key[4]} nodes={key[5]} cpus={key[6]}")
     for name in NAMES:

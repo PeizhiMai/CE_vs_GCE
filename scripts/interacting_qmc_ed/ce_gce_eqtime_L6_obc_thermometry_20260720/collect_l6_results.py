@@ -57,6 +57,23 @@ def finite(value:object)->float:
     return result
 
 
+def validate_final_mu_bracket(row:dict[str,str],max_width:float=0.02)->None:
+    lo,hi=sorted((finite(row["mu_bracket_low"]),finite(row["mu_bracket_high"])))
+    width=hi-lo
+    if width>max_width+1e-12:
+        raise ValueError(
+            f"{row.get('target_key','unknown')}: final mu bracket width "
+            f"{width:.12g} exceeds {max_width:.12g}"
+        )
+    for name in ("mu_fitted","mu_final"):
+        mu=finite(row[name])
+        if not lo-1e-12<=mu<=hi+1e-12:
+            raise ValueError(
+                f"{row.get('target_key','unknown')}: {name}={mu:.12g} "
+                f"outside final bracket [{lo:.12g}, {hi:.12g}]"
+            )
+
+
 def bonds(lx:int=6,ly:int=6):
     nn=[];nnn=[]
     for y in range(ly):
@@ -191,6 +208,9 @@ def inspect_gce(row:dict[str,str])->tuple[dict[str,object]|None,dict[str,object]
         except (IndexError,KeyError,ValueError):pass
     strict=(parent/"dqmc_gce_obc_eqtime_complete.txt").is_file() and ranks==expected and sites==expected and tables==4 and density_ok
     status={"target_key":row["target_key"],"U":row["U"],"Ntot":row["Ntot_target"],"beta":row["beta"],"T":1/float(row["beta"]),"ensemble":"GCE","status":"incomplete","rank_coverage":f"{ranks}/{expected}","site_coverage":f"{sites}/{expected}","table_coverage":f"{tables}/4","checkpoint_coverage":"complete" if root.is_dir() else "0/32","density_error":density_error,"problem":"","root":str(parent)}
+    try:validate_final_mu_bracket(row)
+    except Exception as exc:
+        status["status"]="superseded";status["problem"]=str(exc);return None,status
     if not strict:return None,status
     try:
         bad=forbidden(root)

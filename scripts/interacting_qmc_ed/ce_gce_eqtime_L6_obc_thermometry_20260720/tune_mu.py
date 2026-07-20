@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Advance L=6 OBC GCE density probes to brackets, confirmations, and production."""
+"""Advance L=6 OBC GCE density probes under the authoritative tuning rule.
+
+The corresponding confirmed L=6 PBC chemical potential is only the initial
+OBC seed.  Once the three seed probes complete, every new point is selected
+from the measured OBC density response: unbracketed searches walk one directed
+0.02 step from the best completed point, while coarse brackets are refined one
+interior point at a time.  Production is admitted only from a density-
+straddling bracket no wider than 0.02 with both the secant fit and independent
+confirmation inside that same bracket.
+"""
 
 from __future__ import annotations
 
@@ -243,7 +252,21 @@ def main() -> None:
     parser.add_argument("--manifest-dir", type=Path, required=True)
     parser.add_argument("--write-next", action="store_true")
     parser.add_argument("--max-half-width", type=float, default=2.56)
+    parser.add_argument(
+        "--max-final-bracket-width", type=float, default=0.02,
+        help="maximum endpoint separation for an accepted final mu bracket",
+    )
+    parser.add_argument(
+        "--recenter-step", type=float, default=0.02,
+        help="directed delta-mu for dynamic recentering and bracket refinement",
+    )
     args = parser.parse_args()
+    if not math.isfinite(args.max_half_width) or args.max_half_width <= 0:
+        raise ValueError("--max-half-width must be positive and finite")
+    if not math.isfinite(args.max_final_bracket_width) or args.max_final_bracket_width <= 0:
+        raise ValueError("--max-final-bracket-width must be positive and finite")
+    if not math.isfinite(args.recenter_step) or args.recenter_step <= 0:
+        raise ValueError("--recenter-step must be positive and finite")
 
     inspected = [inspect(row) for row in read_tsvs(args.manifest)]
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -261,22 +284,39 @@ def main() -> None:
         complete = [row for row in rows if bool(row["complete"])]
         all_complete = len(complete) == len(rows)
         bracket = choose_bracket(complete, target_density)
-        confirmations = [
+        confirmations = sorted([
             row for row in complete
             if str(row["probe_role"]).startswith(("confirmation", "production_retune"))
-        ]
+        ], key=lambda row: (float(row["complete_mtime"]), str(row["probe_role"])))
         failure = failures.get(target_key)
         if failure is not None:
             confirmations = [
                 row for row in confirmations
-                if str(row["probe_role"]).startswith("production_retune")
-                and float(row["complete_mtime"]) > float(failure["failed_mtime"])
+                if float(row["complete_mtime"]) > float(failure["failed_mtime"])
             ]
         accepted = [row for row in confirmations if abs(float(row["N_mean"])-target_n) <= 0.03]
-        status = "waiting_for_planned_probes"; mu_fit = math.nan
         family = str(template["family"])
-        if accepted and bracket is not None:
-            confirmation = min(accepted, key=lambda row: abs(float(row["N_mean"])-target_n))
+        bracket_width = bracket_low = bracket_high = math.nan
+        fitted_inside_bracket = False
+        final_bracket_ok = False
+        accepted_in_bracket: list[dict[str, object]] = []
+        if bracket is not None:
+            low, high, bracket_mu_fit, _ = bracket
+            bracket_low, bracket_high = sorted((float(low["mu_probe"]), float(high["mu_probe"])))
+            bracket_width = bracket_high - bracket_low
+            fitted_inside_bracket = bracket_low - 1e-12 <= float(bracket_mu_fit) <= bracket_high + 1e-12
+            final_bracket_ok = (
+                fitted_inside_bracket
+                and bracket_width <= args.max_final_bracket_width + 1e-12
+            )
+            accepted_in_bracket = [
+                row for row in accepted
+                if bracket_low - 1e-12 <= float(row["mu_probe"]) <= bracket_high + 1e-12
+            ]
+
+        status = "waiting_for_planned_probes"; mu_fit = math.nan
+        if accepted_in_bracket and final_bracket_ok and bracket is not None:
+            confirmation = min(accepted_in_bracket, key=lambda row: abs(float(row["N_mean"])-target_n))
             source_manifests = sorted({str(row["_manifest"]) for row in rows})
             productions[family].append(make_production(
                 template, confirmation, bracket, len(productions[family]), source_manifests,
@@ -284,65 +324,106 @@ def main() -> None:
             ))
             status = "confirmed_within_abs_N_0p03"
             mu_fit = float(bracket[2])
-        elif failure is not None and all_complete:
-            # Fold the longer production density into the local monotonic
-            # calibration and require a new independent confirmation.
-            failed_point = {
-                **template, "mu_probe": failure["failed_mu"],
-                "density": failure["failed_density"], "density_err": 0.0,
-            }
-            retune_bracket = choose_bracket(complete + [failed_point], target_density)
-            if retune_bracket is not None:
-                mu_fit = float(retune_bracket[2])
-            else:
-                dmu = float(failure["mu_bracket_high"]) - float(failure["mu_bracket_low"])
-                ddensity = float(failure["density_bracket_high"]) - float(failure["density_bracket_low"])
-                if dmu <= 0 or ddensity <= 1e-8:
-                    status = "production_density_failed_no_monotonic_retune_slope"
-                    mu_fit = math.nan
-                else:
-                    slope = ddensity / dmu
-                    mu_fit = float(failure["failed_mu"]) + (
-                        target_density - float(failure["failed_density"])
-                    ) / slope
-            if math.isfinite(mu_fit):
-                if any(abs(mu_fit-float(row["mu_probe"])) < 5e-7 for row in confirmations):
-                    status = "production_density_failed_duplicate_retune_point"
-                else:
-                    role = f"production_retune_r{int(failure['production_attempt'])+1}"
-                    next_rows[family].append(make_probe(
-                        template, mu_fit, role, "retune_after_out_of_tolerance_production",
-                        len(next_rows[family]),
-                    ))
-                    status = "production_density_failed_retune_confirmation_required"
         elif all_complete and bracket is not None:
             mu_fit = float(bracket[2])
-            existing_confirmation = [
-                float(row["mu_probe"]) for row in confirmations
-            ]
-            if any(abs(mu_fit-value) < 5e-7 for value in existing_confirmation):
-                status = "flat_or_duplicate_confirmation_no_safe_new_point"
+            if not final_bracket_ok:
+                # Refine one interior point at a time.  Start from the
+                # endpoint whose measured density is closest to target and
+                # walk toward the opposite endpoint in local 0.02 steps.
+                low, high, _, _ = bracket
+                center = min((low, high), key=lambda row: abs(float(row["density"])-target_density))
+                other = high if center is low else low
+                center_mu = float(center["mu_probe"]); other_mu = float(other["mu_probe"])
+                direction = 1.0 if other_mu > center_mu else -1.0
+                next_mu = center_mu + direction * args.recenter_step
+                existing_mu = [float(row["mu_probe"]) for row in rows]
+                while (
+                    min(center_mu, other_mu) < next_mu < max(center_mu, other_mu)
+                    and any(abs(next_mu-value) < 5e-7 for value in existing_mu)
+                ):
+                    next_mu += direction * args.recenter_step
+                if not (min(center_mu, other_mu) < next_mu < max(center_mu, other_mu)):
+                    next_mu = (center_mu + other_mu) / 2.0
+                if any(abs(next_mu-value) < 5e-7 for value in existing_mu):
+                    status = "coarse_bracket_no_safe_new_interior_point"
+                else:
+                    seed_mu = float(template["mu_L6_PBC_reference"])
+                    next_offset = next_mu - seed_mu
+                    label = "minus" if next_offset < 0 else "plus"
+                    offset_label = f"{abs(next_offset):g}".replace(".", "p")
+                    role = f"bracket_refine_{label}_{offset_label}"
+                    generation = (
+                        f"tighten_bracket_{bracket_width:g}_to_max_"
+                        f"{args.max_final_bracket_width:g}"
+                    )
+                    next_rows[family].append(make_probe(
+                        template, next_mu, role, generation, len(next_rows[family]),
+                    ))
+                    status = "bracket_refinement_required"
             else:
-                round_no = len(confirmations)+1; role = f"confirmation_r{round_no}"
-                next_rows[family].append(make_probe(template, mu_fit, role, "secant_confirmation", len(next_rows[family])))
-                status = "confirmation_required"
+                matching_confirmations = [
+                    row for row in confirmations
+                    if abs(mu_fit-float(row["mu_probe"])) < 5e-7
+                ]
+                if matching_confirmations:
+                    status = "flat_or_duplicate_confirmation_no_safe_new_point"
+                else:
+                    if failure is None:
+                        role = f"confirmation_r{len(confirmations)+1}"
+                        generation = "secant_confirmation"
+                        status = "confirmation_required"
+                    else:
+                        role = f"production_retune_r{int(failure['production_attempt'])+1}"
+                        generation = "retune_after_out_of_tolerance_production"
+                        status = "production_density_failed_retune_confirmation_required"
+                    next_rows[family].append(make_probe(
+                        template, mu_fit, role, generation, len(next_rows[family]),
+                    ))
         elif all_complete:
-            center = float(template["mu_L6_PBC_reference"])
-            width = max([abs(float(row["mu_probe"])-center) for row in rows] or [0.02])
-            next_width = 0.04 if width < 0.04-1e-12 else width*2
-            if next_width > args.max_half_width+1e-12:
+            # The PBC value is only the seed.  Recenter on the completed OBC
+            # point closest in density and launch exactly one directed 0.02
+            # step; never generate a mirrored partner for symmetry.
+            seed_mu = float(template["mu_L6_PBC_reference"])
+            best = min(complete, key=lambda row: (
+                abs(float(row["density"])-target_density),
+                abs(float(row["mu_probe"])-seed_mu),
+            ))
+            best_mu = float(best["mu_probe"]); best_offset = best_mu-seed_mu
+            ordered = sorted(complete, key=lambda row: float(row["mu_probe"]))
+            dmu = float(ordered[-1]["mu_probe"])-float(ordered[0]["mu_probe"])
+            ddensity = float(ordered[-1]["density"])-float(ordered[0]["density"])
+            slope_sign = 1.0 if dmu == 0 or ddensity/dmu >= 0 else -1.0
+            direction = -slope_sign if float(best["density"])-target_density > 0 else slope_sign
+            existing_mu = [float(row["mu_probe"]) for row in rows]
+            next_mu = best_mu + direction*args.recenter_step
+            while any(abs(next_mu-value) < 5e-7 for value in existing_mu):
+                next_mu += direction*args.recenter_step
+            next_offset = next_mu-seed_mu
+            if abs(next_offset) > args.max_half_width+1e-12:
                 status = "unbracketed_max_width_reached"
             else:
-                for sign,label in ((-1,"minus"),(1,"plus")):
-                    role=f"extension_{label}_{str(next_width).replace('.', 'p')}"
-                    next_rows[family].append(make_probe(template, center+sign*next_width, role, f"symmetric_extension_pm{next_width:g}", len(next_rows[family])))
-                status=f"needs_symmetric_extension_pm{next_width:g}"
+                label = "minus" if next_offset < 0 else "plus"
+                offset_label = f"{abs(next_offset):g}".replace(".", "p")
+                role = f"extension_{label}_{offset_label}"
+                generation = (
+                    f"dynamic_center_{best_offset:+g}_step_"
+                    f"{direction*args.recenter_step:+g}_to_{next_offset:+g}"
+                )
+                next_rows[family].append(make_probe(
+                    template, next_mu, role, generation, len(next_rows[family]),
+                ))
+                status = generation
         summaries.append({
             "target_key": target_key, "family": family, "U_label": template["U_label"], "U": template["U"],
             "Ntot_target": target_n, "target_density": target_density, "beta": template["beta"], "T": template["T"],
             "mu_L6_PBC_reference": template["mu_L6_PBC_reference"], "mu_L8_reference": template["mu_L8_reference"],
             "planned_probes": len(rows), "complete_probes": len(complete), "bracketed": int(bracket is not None),
-            "mu_fitted": mu_fit, "confirmations_complete": len(confirmations), "status": status,
+            "mu_fitted": mu_fit, "bracket_low": bracket_low, "bracket_high": bracket_high,
+            "bracket_width": bracket_width, "fitted_inside_bracket": int(fitted_inside_bracket),
+            "final_bracket_ok": int(final_bracket_ok),
+            "max_final_bracket_width": args.max_final_bracket_width,
+            "confirmations_complete": len(confirmations),
+            "accepted_confirmations_inside_bracket": len(accepted_in_bracket), "status": status,
         })
     if summaries:
         write(args.outdir / "mu_target_status.tsv", summaries, list(summaries[0]))

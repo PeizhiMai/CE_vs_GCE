@@ -129,6 +129,19 @@ def probe_eligible(row: dict[str, str], cutoff: float) -> tuple[bool, str]:
     return True, "fresh_full_gce_probe_checkpoint"
 
 
+def production_bracket_valid(row: dict[str, str]) -> bool:
+    try:
+        lo, high = sorted((float(row["mu_bracket_low"]), float(row["mu_bracket_high"])))
+        fitted = float(row["mu_fitted"]); final_mu = float(row["mu_final"])
+    except (KeyError, ValueError):
+        return False
+    return (
+        high - lo <= 0.020000000001
+        and lo - 1e-12 <= fitted <= high + 1e-12
+        and lo - 1e-12 <= final_mu <= high + 1e-12
+    )
+
+
 def production_final(row: dict[str, str]) -> bool:
     parent = Path(row["out_parent"]); expected = int(row["expected_ranks"])
     complete = parent / f"complete_{obc_base(row, 'mu_final')}"
@@ -146,11 +159,14 @@ def production_final(row: dict[str, str]) -> bool:
         and len(list(complete.glob("obc_equal_time_site_rank_pID-*.tsv"))) == expected
         and all((complete / name).is_file() for name in PRIMARY)
         and density_ok
+        and production_bracket_valid(row)
     )
 
 
 def production_eligible(row: dict[str, str], cutoff: float) -> tuple[bool, str]:
     parent = Path(row["out_parent"]); expected = int(row["expected_ranks"])
+    if not production_bracket_valid(row):
+        return False, "superseded_bad_final_bracket"
     if production_final(row): return False, "strict_final"
     if (parent / "density_tolerance_failed.txt").is_file():
         return False, "density_tolerance_failed_requires_retune"

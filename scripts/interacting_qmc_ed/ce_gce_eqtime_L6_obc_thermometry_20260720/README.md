@@ -68,13 +68,19 @@ pooling.
 value is treated as a provenance error.  Every imported row retains both the
 L=6 PBC value and its inherited L=8 source.
 
+The normative search policy is documented in `MU_TUNING_RULE.md`, adapted from
+the PBC workflow rule at
+`/home/9pm/nUHubbard/scripts/interacting_qmc_ed/ce_gce_eqtime_L6_thermometry_20260719/MU_TUNING_RULE.md`.
 For each interacting target, OBC probes start at `mu_PBC` and
-`mu_PBC +/- 0.02`.  `tune_mu.py` expands symmetrically through
-`0.04,0.08,0.16,...`, chooses the nearest monotonic bracket, performs secant
-interpolation, and requires a separate confirmation probe.  GCE production is
-admitted only when `abs(N_OBC-Ntarget)<=0.03`.  An out-of-tolerance production
-row is retained as a high-statistics tuning point and generates a fresh
-confirmation/production attempt with a new root.
+`mu_PBC +/- 0.02`.  If those points do not bracket the target, `tune_mu.py`
+recenters on the completed OBC point closest in density and submits only one
+directed 0.02 step; it never adds a mirrored point for symmetry.  A coarse
+density-straddling bracket is refined one interior 0.02 step at a time.
+Production is admitted only from a bracket no wider than 0.02, with both the
+secant fit and independent confirmation inside that bracket and
+`abs(N_OBC-Ntarget)<=0.03`.  Production must independently satisfy the same
+particle-number tolerance.  Failed or wide-bracket production is superseded,
+excluded from analysis/repair, and replaced only after a fresh confirmation.
 
 All interacting GCE production uses 32 ranks, 5,000 warmups, and 50,000
 measurements/rank.  GCE continues for all 152 targets even when the matching CE
