@@ -7,8 +7,16 @@
 # No changes need to made to this section of the code from the previous
 # [1b) Square Hubbard Model with MPI Parallelization](@ref) tutorial.
 
-# Load MKL before SmoQyDQMC/LinearAlgebra so Julia uses Intel MKL BLAS/LAPACK.
-using MKL
+# Load MKL before SmoQyDQMC/LinearAlgebra when the active environment has it.
+# This preserves the production default while allowing the frozen v2.0.11
+# compatibility environment to be audited without resolving its old manifest.
+if lowercase(get(ENV, "SMOQY_USE_MKL", "true")) != "false" && Base.find_package("MKL") !== nothing
+    try
+        @eval using MKL
+    catch err
+        @warn "SMOQY_USE_MKL requested but MKL could not be loaded; using the default BLAS/LAPACK" exception=(err, catch_backtrace())
+    end
+end
 using LinearAlgebra
 @info "BLAS/LAPACK configuration" LinearAlgebra.BLAS.get_config()
 
@@ -20,6 +28,11 @@ using Random
 using Printf
 using MPI
 using JLD2
+
+include(joinpath(@__DIR__, "square_lattice_geometry.jl"))
+using .SquareLatticeGeometry
+include(joinpath(@__DIR__, "smoqy_obc_equal_time.jl"))
+using .SmoQyOBCEqualTime
 
 function safe_jld2_checkpoint_write(
     simulation_info::SimulationInfo;
@@ -178,6 +191,7 @@ function run_simulation(
     ph_sym_form = true, # Use particle-hole symmetric Hubbard interaction convention.
     L, # System size in x.
     Ly = L, # System size in y.
+    boundary = "periodic", # periodic or open in both spatial directions.
     β, # Inverse temperature.
     N_therm, # Number of thermalization updates.
     N_measurements, # Total number of measurements.
@@ -212,6 +226,15 @@ function run_simulation(
         throw(ArgumentError("measurement_profile must be one of: full, equal-time-only, density-only, autocorr-current, autocorr-global"))
     checkpoint_every_n_measurements >= 0 ||
         throw(ArgumentError("checkpoint_every_n_measurements must be non-negative. Got $(checkpoint_every_n_measurements)."))
+    boundary = lowercase(String(boundary))
+    boundary in ("periodic", "open") || throw(ArgumentError("boundary must be periodic or open"))
+    if boundary == "open"
+        checkerboard && throw(ArgumentError("OBC checkerboard propagation is not validated; use checkerboard=false"))
+        measurement_profile in ("equal-time-only", "density-only") ||
+            throw(ArgumentError("OBC supports only equal-time-only or density-only profiles"))
+        occursin("_obc_", filepath) ||
+            throw(ArgumentError("OBC requires a fresh filepath containing '_obc_': $(filepath)"))
+    end
 
     β_requested = β
     Lτ = round(Int, β / Δτ)
@@ -232,11 +255,20 @@ function run_simulation(
     checkpoint_freq = checkpoint_freq * 60.0^2
 
     ## Construct the foldername the data will be written to.
-    datafolder_prefix = @sprintf "hubbard_spin_hs_rect_U%.2f_tp%.2f_mu%.2f_Lx%d_Ly%d_b%.2f" U t′ μ L Ly β
+    datafolder_prefix = if boundary == "open"
+        @sprintf "hubbard_spin_hs_obc_rect_U%.2f_tp%.2f_mu%.2f_Lx%d_Ly%d_b%.2f" U t′ μ L Ly β
+    else
+        @sprintf "hubbard_spin_hs_rect_U%.2f_tp%.2f_mu%.2f_Lx%d_Ly%d_b%.2f" U t′ μ L Ly β
+    end
 
     ## Get MPI process ID.
     pID = MPI.Comm_rank(comm)
     comm_size = MPI.Comm_size(comm)
+
+    square_geometry = build_square_geometry(
+        L, Ly; boundary=boundary, t=1.0, tprime=t′,
+    )
+    provenance = smoqy_provenance()
 
     ## Initialize simulation info.
     simulation_info = SimulationInfo(
@@ -332,6 +364,15 @@ function run_simulation(
         metadata["hst_channel"] = "spin_hirsch"
         metadata["local_acceptance_rate"] = 0.0
         metadata["reflection_acceptance_rate"] = 0.0
+        metadata["boundary"] = boundary
+        metadata["smoqydqmc_version"] = provenance.upstream_version
+        metadata["smoqydqmc_commit"] = provenance.fork_commit
+        metadata["smoqydqmc_branch"] = provenance.fork_branch
+        for (key, value) in geometry_metadata(square_geometry)
+            metadata["geometry_$(key)"] = value
+        end
+        metadata["obc_estimator_tables"] = boundary == "open" ?
+            "equal_time_kinetic_per_site_qmc.tsv,equal_time_double_occupancy_per_site_qmc.tsv,equal_time_nn_spin_qmc.tsv,equal_time_nn_connected_charge_qmc.tsv" : ""
 
 # ## Initialize Model
 # No changes need to made to this section of the code from the previous
@@ -344,10 +385,10 @@ function run_simulation(
             basis_vecs = [[0.0, 0.0]]
         )
 
-        ## Define finite lattice with periodic boundary conditions.
+        ## Define the finite lattice with the requested boundary conditions.
         lattice = lu.Lattice(
             L = [L, Ly],
-            periodic = [true, true]
+            periodic = collect(boundary_flags(boundary))
         )
 
         ## Initialize model geometry.
@@ -493,7 +534,7 @@ function run_simulation(
             )
         end
 
-        if measurement_profile in ("full", "equal-time-only")
+        if boundary == "periodic" && measurement_profile in ("full", "equal-time-only")
             ## Initialize density correlation function measurement.
             initialize_correlation_measurements!(
                 measurement_container = measurement_container,
@@ -555,6 +596,10 @@ function run_simulation(
             )
         end
 
+        obc_equal_time_accumulator = (
+            boundary == "open" && measurement_profile == "equal-time-only"
+        ) ? OBCEqualTimeAccumulator(square_geometry.nsites) : nothing
+
 # ## Write first checkpoint
 # This section of code needs to be added so that a first checkpoint file is written before
 # beginning a new simulation. We do this using the [`write_jld2_checkpoint`](@ref) function.
@@ -571,7 +616,8 @@ function run_simulation(
             ## Contents of checkpoint file below.
             n_therm, n_measurements,
             tight_binding_parameters, hubbard_parameters, hst_parameters,
-            measurement_container, model_geometry, metadata, rng
+            measurement_container, model_geometry, metadata, rng,
+            obc_equal_time_accumulator
         )
 
 # ## Load checkpoint
@@ -593,9 +639,23 @@ function run_simulation(
         measurement_container = checkpoint["measurement_container"]
         model_geometry = checkpoint["model_geometry"]
         metadata = checkpoint["metadata"]
+        obc_equal_time_accumulator = get(checkpoint, "obc_equal_time_accumulator", nothing)
+        get(metadata, "boundary", "periodic") == boundary || error("checkpoint boundary mismatch")
+        get(metadata, "smoqydqmc_version", "unknown") == provenance.upstream_version || error("checkpoint SmoQyDQMC version mismatch")
+        get(metadata, "smoqydqmc_commit", "unknown") == provenance.fork_commit || error("checkpoint SmoQyDQMC fork commit mismatch")
+        if boundary == "open" && measurement_profile == "equal-time-only"
+            obc_equal_time_accumulator isa OBCEqualTimeAccumulator ||
+                error("OBC checkpoint is missing the direct equal-time accumulator")
+        end
         rng = checkpoint["rng"]
         n_therm = checkpoint["n_therm"]
         n_measurements = checkpoint["n_measurements"]
+    end
+
+    if boundary == "open"
+        reconstructed = smoqy_hopping_matrix(tight_binding_parameters)
+        isapprox(reconstructed, square_geometry.hopping; atol=1e-13, rtol=0) ||
+            error("SmoQyDQMC/shared OBC one-body Hamiltonian mismatch")
     end
 
 # ## Setup DQMC simulation
@@ -711,7 +771,8 @@ function run_simulation(
             n_therm = update + 1,
             n_measurements = 1,
             tight_binding_parameters, hubbard_parameters, hst_parameters,
-            measurement_container, model_geometry, metadata, rng
+            measurement_container, model_geometry, metadata, rng,
+            obc_equal_time_accumulator
         )
     end
 
@@ -805,6 +866,15 @@ function run_simulation(
                 update_stabilization_frequency = update_stabilization_frequency && (fermion_greens_calculator_up.n_stab > n_stab_min)
             )
 
+            if obc_equal_time_accumulator !== nothing
+                phase = configuration_phase(
+                    fermion_path_integral_up, sgndetGup, sgndetGdn,
+                )
+                record_obc_equal_time!(
+                    obc_equal_time_accumulator, square_geometry, Gup, Gdn, phase; U=U,
+                )
+            end
+
             ## Write the bin-averaged measurements to file if update ÷ bin_size == 0.
             write_measurements!(
                 measurement_container = measurement_container,
@@ -838,7 +908,19 @@ function run_simulation(
             n_therm  = N_therm + 1,
             n_measurements = n_measurements,
             tight_binding_parameters, hubbard_parameters, hst_parameters,
-            measurement_container, model_geometry, metadata, rng
+            measurement_container, model_geometry, metadata, rng,
+            obc_equal_time_accumulator
+        )
+    end
+
+    if obc_equal_time_accumulator !== nothing
+        write_obc_rank_accumulator(
+            simulation_info.datafolder, obc_equal_time_accumulator, pID, square_geometry,
+        )
+        MPI.Barrier(comm)
+        write_obc_pooled_outputs(
+            comm, simulation_info.datafolder, obc_equal_time_accumulator, square_geometry;
+            beta=β, U=U,
         )
     end
 
@@ -941,7 +1023,30 @@ end # end of run_simulation function
 # This is a useful feature when submitting jobs on a cluster, as it allows the same job file to be used for
 # both starting new simulations and resuming ones that still need to finish.
 
+function parse_driver_cli(args)
+    positional = String[]
+    boundary_flag = nothing
+    for arg in args
+        if startswith(arg, "--boundary=")
+            isnothing(boundary_flag) || throw(ArgumentError("--boundary may be specified only once"))
+            boundary_flag = lowercase(split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--")
+            throw(ArgumentError("unknown option: $(arg)"))
+        else
+            push!(positional, arg)
+        end
+    end
+    length(positional) >= 11 || throw(ArgumentError("expected at least 11 positional arguments"))
+    positional_boundary = length(positional) >= 25 ? lowercase(positional[25]) : "periodic"
+    if !isnothing(boundary_flag) && length(positional) >= 25 && boundary_flag != positional_boundary
+        throw(ArgumentError("conflicting positional and --boundary values"))
+    end
+    return positional, something(boundary_flag, positional_boundary)
+end
+
 if abspath(PROGRAM_FILE) == @__FILE__
+
+    cli_args, cli_boundary = parse_driver_cli(ARGS)
 
     ## Initialize MPI
     MPI.Init()
@@ -952,30 +1057,31 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ## Run the simulation, reading in command line arguments.
     run_simulation(
         comm;
-        sID = parse(Int, ARGS[1]), # Simulation ID.
-        U = parse(Float64, ARGS[2]), # Hubbard interaction.
-        t′ = parse(Float64, ARGS[3]), # Next-nearest-neighbor hopping amplitude.
-        μ = parse(Float64, ARGS[4]), # Chemical potential.
-        L = parse(Int, ARGS[5]), # System size.
-        β = parse(Float64, ARGS[6]), # Inverse temperature.
-        N_therm = parse(Int, ARGS[7]), # Number of thermalization updates.
-        N_measurements = parse(Int, ARGS[8]), # Total number of measurements and measurement updates.
-        N_bins = parse(Int, ARGS[9]), # Number of times bin-averaged measurements are written to file.
-        N_updates = parse(Int, ARGS[10]), # Number of updates between measurements.
-        checkpoint_freq = parse(Float64, ARGS[11]), # Frequency with which checkpoint files are written in hours.
-        runtime_limit = length(ARGS) >= 12 ? parse(Float64, ARGS[12]) : Inf, # Runtime limit in hours.
-        ph_sym_form = length(ARGS) >= 13 ? parse(Bool, ARGS[13]) : true,
-        filepath = length(ARGS) >= 14 ? ARGS[14] : joinpath(@__DIR__, "..", "..", "results", "interacting_qmc_ed", "smoqydqmc_hubbard_spin_hs_checkpoint"),
-        Ly = length(ARGS) >= 15 ? parse(Int, ARGS[15]) : parse(Int, ARGS[5]),
-        measurement_profile = length(ARGS) >= 16 ? ARGS[16] : "full",
-        Δτ = length(ARGS) >= 17 ? parse(Float64, ARGS[17]) : 0.05,
-        n_stab = length(ARGS) >= 18 ? parse(Int, ARGS[18]) : 10,
-        δG_max = length(ARGS) >= 19 ? parse(Float64, ARGS[19]) : 1e-6,
-        use_reflection_update = length(ARGS) >= 20 ? parse(Bool, ARGS[20]) : false,
-        update_stabilization_frequency = length(ARGS) >= 21 ? parse(Bool, ARGS[21]) : false,
-        n_stab_min = length(ARGS) >= 22 ? parse(Int, ARGS[22]) : 1,
-        seed = length(ARGS) >= 23 ? parse(Int, ARGS[23]) : abs(rand(Int)),
-        checkpoint_every_n_measurements = length(ARGS) >= 24 ? parse(Int, ARGS[24]) : 0
+        sID = parse(Int, cli_args[1]), # Simulation ID.
+        U = parse(Float64, cli_args[2]), # Hubbard interaction.
+        t′ = parse(Float64, cli_args[3]), # Next-nearest-neighbor hopping amplitude.
+        μ = parse(Float64, cli_args[4]), # Chemical potential.
+        L = parse(Int, cli_args[5]), # System size.
+        β = parse(Float64, cli_args[6]), # Inverse temperature.
+        N_therm = parse(Int, cli_args[7]), # Number of thermalization updates.
+        N_measurements = parse(Int, cli_args[8]), # Total number of measurements and measurement updates.
+        N_bins = parse(Int, cli_args[9]), # Number of times bin-averaged measurements are written to file.
+        N_updates = parse(Int, cli_args[10]), # Number of updates between measurements.
+        checkpoint_freq = parse(Float64, cli_args[11]), # Frequency with which checkpoint files are written in hours.
+        runtime_limit = length(cli_args) >= 12 ? parse(Float64, cli_args[12]) : Inf, # Runtime limit in hours.
+        ph_sym_form = length(cli_args) >= 13 ? parse(Bool, cli_args[13]) : true,
+        filepath = length(cli_args) >= 14 ? cli_args[14] : joinpath(@__DIR__, "..", "..", "results", "interacting_qmc_ed", "smoqydqmc_hubbard_spin_hs_checkpoint"),
+        Ly = length(cli_args) >= 15 ? parse(Int, cli_args[15]) : parse(Int, cli_args[5]),
+        measurement_profile = length(cli_args) >= 16 ? cli_args[16] : "full",
+        Δτ = length(cli_args) >= 17 ? parse(Float64, cli_args[17]) : 0.05,
+        n_stab = length(cli_args) >= 18 ? parse(Int, cli_args[18]) : 10,
+        δG_max = length(cli_args) >= 19 ? parse(Float64, cli_args[19]) : 1e-6,
+        use_reflection_update = length(cli_args) >= 20 ? parse(Bool, cli_args[20]) : false,
+        update_stabilization_frequency = length(cli_args) >= 21 ? parse(Bool, cli_args[21]) : false,
+        n_stab_min = length(cli_args) >= 22 ? parse(Int, cli_args[22]) : 1,
+        seed = length(cli_args) >= 23 ? parse(Int, cli_args[23]) : abs(rand(Int)),
+        checkpoint_every_n_measurements = length(cli_args) >= 24 ? parse(Int, cli_args[24]) : 0,
+        boundary = cli_boundary,
     )
 
     ## Finalize MPI.

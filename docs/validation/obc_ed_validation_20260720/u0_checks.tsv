@@ -1,0 +1,5 @@
+ensemble	L	nup	ndn	beta	many_body_eigenvalues_enumerated	one_body_hamiltonian_abs_error	one_body_spectrum_abs_error	thermal_kinetic_abs_error	tail_weight_bound	method	passed	target_N	achieved_N	mu_ph_symmetric	mu_bracket_low	mu_bracket_high	density_abs_error
+CE	2	2	2	5.0	36	0.0	0.0	3.3306690738754696e-15	0.0	complete one-body diagonalization and exact fixed-N Slater trace	True	4	4.0	not_applicable	not_applicable	not_applicable	0.0
+GCE	2			5.0		0.0	0.0	2.1094237467877974e-15	0.0	complete one-body diagonalization and exact Fermi trace	True	4	3.9999999999999956	4.440892098500626e-16	-1.0	1.0	4.440892098500626e-15
+CE	3	4	4	5.0	15876	0.0	0.0	1.3322676295501878e-15	0.0	complete one-body diagonalization and exact fixed-N Slater trace	True	8	8.0	not_applicable	not_applicable	not_applicable	0.0
+GCE	3			5.0		0.0	0.0	2.886579864025407e-15	0.0	complete one-body diagonalization and exact Fermi trace	True	8	8.000000000000028	-0.13787162640060688	-1.0	1.0	2.842170943040401e-14

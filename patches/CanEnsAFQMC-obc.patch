@@ -1,0 +1,55 @@
+diff --git a/src/base/matrix_generator.jl b/src/base/matrix_generator.jl
+index 089667a..b674cf1 100644
+--- a/src/base/matrix_generator.jl
++++ b/src/base/matrix_generator.jl
+@@ -32 +32,4 @@ end
+-function hopping_matrix_Hubbard_2d(Lx::Int, Ly::Int64, t::Float64)
++function hopping_matrix_Hubbard_2d(
++    Lx::Int, Ly::Int, t::Float64;
++    isOBC::Bool = false,
++)
+@@ -35,0 +39,19 @@ function hopping_matrix_Hubbard_2d(Lx::Int, Ly::Int64, t::Float64)
++    if isOBC
++        # Site ordering is x-fastest: i = x + 1 + y*Lx.  Add each physical
++        # undirected edge once and never wrap across an open boundary.
++        @inbounds for y in 0:(Ly - 1), x in 0:(Lx - 2)
++            i = x + 1 + y * Lx
++            j = i + 1
++            T[i, j] = -t
++            T[j, i] = -t
++        end
++        @inbounds for y in 0:(Ly - 2), x in 0:(Lx - 1)
++            i = x + 1 + y * Lx
++            j = i + Lx
++            T[i, j] = -t
++            T[j, i] = -t
++        end
++        return T
++    end
++
++    # Preserve the historical periodic implementation exactly when isOBC=false.
+diff --git a/test/runtests.jl b/test/runtests.jl
+index f6936f7..3980d49 100644
+--- a/test/runtests.jl
++++ b/test/runtests.jl
+@@ -2,0 +3,20 @@ using CanEnsAFQMC, GenericLinearAlgebra, Test
++@testset "2D Hubbard open-boundary hopping" begin
++    for (Lx, Ly, expected_edges) in ((2, 2, 4), (3, 3, 12), (2, 3, 7))
++        T = hopping_matrix_Hubbard_2d(Lx, Ly, 1.0; isOBC=true)
++        @test T == transpose(T)
++        @test count(!iszero, triu(T, 1)) == expected_edges
++        @test all(x -> x in (0.0, -1.0), T)
++    end
++
++    # No horizontal edge may wrap from the right edge to the next row, and no
++    # vertical edge may wrap from the top to the bottom.
++    T3 = hopping_matrix_Hubbard_2d(3, 3, 1.0; isOBC=true)
++    @test T3[3, 4] == 0
++    @test T3[6, 7] == 0
++    @test T3[1, 7] == 0
++
++    # The default remains the original periodic path.
++    @test hopping_matrix_Hubbard_2d(3, 3, 1.0) ==
++          hopping_matrix_Hubbard_2d(3, 3, 1.0; isOBC=false)
++end
++

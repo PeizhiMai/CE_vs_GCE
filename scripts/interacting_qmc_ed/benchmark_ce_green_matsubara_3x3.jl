@@ -16,16 +16,20 @@ end
 using LinearAlgebra
 using Random
 using Serialization
+import SHA
 using Statistics
 using TOML
 using CanEnsAFQMC
 
 include(joinpath(@__DIR__, "ce_unequal_time_current_helpers.jl"))
+include(joinpath(@__DIR__, "square_lattice_geometry.jl"))
+using .SquareLatticeGeometry
 
 function parse_args(args)
     params = Dict(
         "lx" => 3,
         "ly" => 3,
+        "boundary" => "periodic",
         "nup" => 4,
         "ndn" => 4,
         "u" => -5.0,
@@ -81,6 +85,8 @@ function parse_args(args)
             params["lx"] = parse(Int, split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--ly=")
             params["ly"] = parse(Int, split(arg, "=", limit=2)[2])
+        elseif startswith(arg, "--boundary=")
+            params["boundary"] = lowercase(split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--nup=")
             params["nup"] = parse(Int, split(arg, "=", limit=2)[2])
         elseif startswith(arg, "--ndn=")
@@ -186,7 +192,18 @@ function parse_args(args)
 end
 
 function build_system(params)
-    tmat = hopping_matrix_Hubbard_2d(params["lx"], params["ly"], 1.0)
+    geometry = build_square_geometry(
+        params["lx"], params["ly"];
+        boundary=params["boundary"], t=1.0, tprime=0.0,
+    )
+    # Keep the CanEnsAFQMC constructor independently exercised and require it
+    # to match the shared CE/GCE/ED Hamiltonian exactly.
+    canens_tmat = hopping_matrix_Hubbard_2d(
+        params["lx"], params["ly"], 1.0;
+        isOBC=(geometry.boundary === :open),
+    )
+    canens_tmat == geometry.hopping || error("CanEnsAFQMC/shared hopping mismatch")
+    tmat = geometry.hopping
     L = round(Int, params["beta"] / params["dtau"])
     sys_type = params["sys_type"] == "complex" ? ComplexF64 : Float64
     return GenericHubbard(
@@ -235,10 +252,29 @@ function build_qmc(system, params)
     )
 end
 
-function write_metadata(outdir, params, L)
+function dependency_provenance()
+    root = normpath(joinpath(@__DIR__, "..", ".."))
+    git_commit(path) = try
+        readchomp(`git -C $path rev-parse HEAD`)
+    catch
+        "unknown"
+    end
+    file_sha256(path) = isfile(path) ? bytes2hex(open(SHA.sha256, path)) : "missing"
+    return Dict(
+        "ce_backend" => "CanEnsAFQMC",
+        "canensafqmc_base_commit" => git_commit(joinpath(root, "external", "CanEnsAFQMC")),
+        "canensafqmc_current_response_patch_sha256" => file_sha256(joinpath(root, "patches", "CanEnsAFQMC-current-response.patch")),
+        "canensafqmc_obc_patch_sha256" => file_sha256(joinpath(root, "patches", "CanEnsAFQMC-obc.patch")),
+        "smoqydqmc_reference_version" => "2.0.12",
+        "smoqydqmc_obc_fork_commit" => git_commit(joinpath(root, "external", "SmoQyDQMC")),
+        "checkpoint_compatibility" => "exact CE backend commit and patch hashes only",
+    )
+end
+
+function write_metadata(outdir, params, L, geometry)
     metadata = Dict(
         "target" => "3x3 CE equal-time + BKT/current-response benchmark with optional unequal-time single-particle G(r,tau)/G(k,tau)",
-        "lattice" => Dict("lx" => params["lx"], "ly" => params["ly"]),
+        "lattice" => geometry_metadata(geometry),
         "particles" => Dict("nup" => params["nup"], "ndn" => params["ndn"]),
         "model" => Dict(
             "u" => params["u"],
@@ -254,6 +290,7 @@ function write_metadata(outdir, params, L)
             "cluster_size" => params["cluster_size"],
             "stab_interval" => params["stab_interval"],
         ),
+        "dependencies" => dependency_provenance(),
         "unequal_time" => Dict(
             "enabled" => params["measure_greens"],
             "Ctau_branch" => "addition",
@@ -289,6 +326,8 @@ function write_metadata(outdir, params, L)
             "correlations_enabled" => params["measure_equal_time_correlations"],
             "correlation_files" => "equal_time_charge_spin_wedge_qmc.tsv, equal_time_structure_factors_qmc.tsv, equal_time_neighbor_shells_qmc.tsv",
             "correlation_notes" => "charge and spin equal-time correlations only; no pairing measurements; charge structure factor is also written in connected form C_nn(r)-density^2; spin_s_s uses s=n_up-n_dn and spin_SzSz=spin_s_s/4",
+            "obc_direct_bond_file" => geometry.boundary === :open ? "equal_time_bond_observables_qmc.tsv" : "",
+            "obc_primary_files" => geometry.boundary === :open ? "equal_time_kinetic_per_site_qmc.tsv, equal_time_double_occupancy_per_site_qmc.tsv, equal_time_nn_spin_qmc.tsv, equal_time_nn_connected_charge_qmc.tsv" : "",
             "phase_reweight" => params["phase_reweight"],
             "phase_definition" => "phase = sign(det_up) * sign(det_down); observables are sum(phase*O)/sum(phase)",
         ),
@@ -445,7 +484,95 @@ function write_equal_time_summary(
     end
 end
 
-function measure_equal_time_observables(system, ρup, ρdn; kx_value=nothing)
+function _bond_connected_from_site_mean(raw, bonds, site_density)
+    isempty(bonds) && return NaN
+    return raw - sum(site_density[i] * site_density[j] for (i, j) in bonds) / length(bonds)
+end
+
+function _write_primary_equal_time_file(
+    outdir, filename, observable, value, stderr, params, nsamples, batches,
+    phase_sum, average_phase, phase_reweighted,
+)
+    open(joinpath(outdir, filename), "w") do io
+        println(io, "boundary\tbeta\ttemperature\tobservable\tvalue\tstderr\tnsamples\tbatches\tphase_reweighted\tphase_sum\taverage_phase")
+        println(io, join((
+            params["boundary"], params["beta"], 1 / params["beta"], observable,
+            value, stderr, nsamples, batches, phase_reweighted, phase_sum, average_phase,
+        ), '\t'))
+    end
+end
+
+function write_obc_equal_time_bond_summaries(
+    outdir, params, geometry, equal_mean, equal_err,
+    bond_mean, bond_err, site_density_mean,
+    nsamples, batches, phase_sum, average_phase, phase_reweighted;
+    bond_signed_sums=nothing,
+    site_density_signed_sums=nothing,
+)
+    geometry.boundary === :open || error("OBC bond writer called for non-OBC geometry")
+    nn_connected = _bond_connected_from_site_mean(
+        bond_mean[1], geometry.nn_bonds, site_density_mean,
+    )
+    nnn_connected = _bond_connected_from_site_mean(
+        bond_mean[3], geometry.nnn_bonds, site_density_mean,
+    )
+    signed = bond_signed_sums === nothing ? bond_mean .* phase_sum : bond_signed_sums
+    open(joinpath(outdir, "equal_time_bond_observables_qmc.tsv"), "w") do io
+        println(io, "shell\tbond_count\tcharge_corr_raw\tcharge_corr_raw_stderr\tcharge_corr_connected\tcharge_corr_connected_stderr\tspin_corr_s_s\tspin_corr_s_s_stderr\tspin_corr_SzSz\tspin_corr_SzSz_stderr\tnsamples\tbatches\tphase_reweighted\tphase_sum\taverage_phase\tcharge_corr_raw_signed_sum\tspin_corr_s_s_signed_sum\testimator_normalization")
+        for (name, count, raw_i, spin_i, conn_i, conn_err_i) in (
+            ("NN", length(geometry.nn_bonds), 1, 2, nn_connected, bond_err[5]),
+            ("NNN", length(geometry.nnn_bonds), 3, 4, nnn_connected, bond_err[6]),
+        )
+            println(io, join((
+                name, count,
+                bond_mean[raw_i], bond_err[raw_i], conn_i, conn_err_i,
+                bond_mean[spin_i], bond_err[spin_i],
+                0.25 * bond_mean[spin_i], 0.25 * bond_err[spin_i],
+                nsamples, batches, phase_reweighted, phase_sum, average_phase,
+                signed[raw_i], signed[spin_i],
+                "existing undirected physical bonds",
+            ), '\t'))
+        end
+    end
+
+    site_signed = site_density_signed_sums === nothing ?
+        site_density_mean .* phase_sum : site_density_signed_sums
+    open(joinpath(outdir, "equal_time_site_density_qmc.tsv"), "w") do io
+        println(io, "site\tx\ty\tdensity\tdensity_stderr\tnsamples\tbatches\tphase_reweighted\tphase_sum\taverage_phase\tdensity_signed_sum")
+        for site in eachindex(site_density_mean)
+            x, y = geometry.coordinates[site]
+            println(io, join((
+                site, x, y, site_density_mean[site], NaN,
+                nsamples, batches, phase_reweighted, phase_sum, average_phase,
+                site_signed[site],
+            ), '\t'))
+        end
+    end
+
+    _write_primary_equal_time_file(
+        outdir, "equal_time_kinetic_per_site_qmc.tsv", "kinetic_per_site",
+        equal_mean[1], equal_err[1], params, nsamples, batches,
+        phase_sum, average_phase, phase_reweighted,
+    )
+    _write_primary_equal_time_file(
+        outdir, "equal_time_double_occupancy_per_site_qmc.tsv", "double_occupancy_per_site",
+        equal_mean[4], equal_err[4], params, nsamples, batches,
+        phase_sum, average_phase, phase_reweighted,
+    )
+    _write_primary_equal_time_file(
+        outdir, "equal_time_nn_spin_qmc.tsv", "nn_spin_s_s",
+        bond_mean[2], bond_err[2], params, nsamples, batches,
+        phase_sum, average_phase, phase_reweighted,
+    )
+    _write_primary_equal_time_file(
+        outdir, "equal_time_nn_connected_charge_qmc.tsv", "nn_connected_charge",
+        nn_connected, bond_err[5], params, nsamples, batches,
+        phase_sum, average_phase, phase_reweighted,
+    )
+    return (nn_connected=nn_connected, nnn_connected=nnn_connected)
+end
+
+function measure_ce_equal_time_observables(system, ρup, ρdn; kx_value=nothing)
     nsites = system.V
     energy = real.(ce_measure_Energy(system, ρup, ρdn)) ./ nsites
     docc = sum(real.(diag(ρup.ρ₁) .* diag(ρdn.ρ₁))) / nsites
@@ -1087,10 +1214,11 @@ function write_metropolis_ratio_diagnostics(
     return path
 end
 
-const CHECKPOINT_VERSION = 1
+const CHECKPOINT_VERSION = 3
 const CHECKPOINT_CORE_PARAM_KEYS = [
     "lx",
     "ly",
+    "boundary",
     "nup",
     "ndn",
     "u",
@@ -1257,6 +1385,11 @@ function validate_checkpoint_state(state, params, system)
     saved_core = get(state, "core_params", nothing)
     current_core = checkpoint_core_params(params)
     saved_core isa Dict || error("checkpoint is missing core_params")
+    saved_provenance = get(state, "dependency_provenance", nothing)
+    current_provenance = dependency_provenance()
+    saved_provenance == current_provenance || error(
+        "checkpoint CE dependency provenance mismatch: saved=$(saved_provenance) current=$(current_provenance)",
+    )
     mismatches = String[]
     for key in CHECKPOINT_CORE_PARAM_KEYS
         if !haskey(saved_core, key) || saved_core[key] != current_core[key]
@@ -1316,14 +1449,27 @@ end
 
 function main(args=ARGS)
     params = parse_args(args)
+    params["boundary"] in ("periodic", "open") || error("--boundary must be periodic or open")
+    if params["boundary"] == "open" && params["u"] > 0
+        !params["use_charge_hs"] || error("positive-U OBC CE requires spin-channel Hirsch HS (--use-charge-hs=false)")
+        !params["force_symmetry"] || error("positive-U OBC CE requires --force-symmetry=false")
+        params["phase_reweight"] || error("positive-U OBC CE requires --phase-reweight=true")
+    end
     root = normpath(joinpath(@__DIR__, "..", ".."))
     outdir = joinpath(root, params["output_dir"])
+    if params["boundary"] == "open" && !occursin("_obc_", outdir)
+        error("OBC requires a fresh run root containing '_obc_': $(outdir)")
+    end
     mkpath(outdir)
     run_start_time = time()
 
+    geometry = build_square_geometry(
+        params["lx"], params["ly"];
+        boundary=params["boundary"], t=1.0, tprime=0.0,
+    )
     system = build_system(params)
     qmc = build_qmc(system, params)
-    write_metadata(outdir, params, system.L)
+    write_metadata(outdir, params, system.L, geometry)
 
     ntau = system.L
     lx, ly, _ = system.Ns
@@ -1334,6 +1480,12 @@ function main(args=ARGS)
     measure_equal_time = params["measure_equal_time"]
     measure_equal_time_correlations = measure_equal_time && params["measure_equal_time_correlations"]
     phase_reweight = params["phase_reweight"]
+    if geometry.boundary === :open
+        measure_equal_time || error("OBC is currently supported only for equal-time measurements")
+        measure_equal_time_correlations || error("OBC requires direct NN/NNN equal-time bond measurements")
+        !measure_greens || error("OBC unequal-time/FFT measurements are not validated")
+        !measure_bkt || error("OBC BKT/momentum-space measurements are not validated")
+    end
     if phase_reweight && (measure_greens || measure_bkt || !measure_equal_time)
         error("--phase-reweight=true is currently supported only for equal-time-only runs")
     end
@@ -1378,12 +1530,22 @@ function main(args=ARGS)
     sumsq_equal_time = zeros(Float64, 5)
     phase_sum = 0.0
     abs_phase_sum = 0.0
-    corr_sampler = measure_equal_time_correlations ? CorrFuncSampler(system, qmc; nsamples=1) : nothing
-    corr_deltas = measure_equal_time_correlations ? copy(corr_sampler.δr) : Tuple{Int,Int}[]
+    direct_obc_bonds = measure_equal_time_correlations && geometry.boundary === :open
+    translational_correlations = measure_equal_time_correlations && !direct_obc_bonds
+    corr_sampler = translational_correlations ? CorrFuncSampler(system, qmc; nsamples=1) : nothing
+    corr_deltas = translational_correlations ? copy(corr_sampler.δr) : Tuple{Int,Int}[]
     corr_delta_to_index = Dict{Tuple{Int,Int},Int}(d => i for (i, d) in enumerate(corr_deltas))
-    q_reps = measure_equal_time_correlations ? d4_momentum_reps(lx, ly) : Tuple{Int,Int}[]
-    shells = measure_equal_time_correlations ? neighbor_shell_definitions(lx, ly; nshells=4) : Tuple{Int,Int,Vector{Tuple{Int,Int}}}[]
+    q_reps = translational_correlations ? d4_momentum_reps(lx, ly) : Tuple{Int,Int}[]
+    shells = translational_correlations ? neighbor_shell_definitions(lx, ly; nshells=4) : Tuple{Int,Int,Vector{Tuple{Int,Int}}}[]
     density_fixed = (params["nup"] + params["ndn"]) / (lx * ly)
+    # OBC direct-bond vector:
+    # [NN charge raw, NN spin, NNN charge raw, NNN spin,
+    #  NN instantaneous-connected, NNN instantaneous-connected].
+    sum_obc_bonds = zeros(Float64, 6)
+    sum_raw_obc_bonds = zeros(Float64, 6)
+    sumsq_obc_bonds = zeros(Float64, 6)
+    sum_obc_site_density = zeros(Float64, geometry.nsites)
+    sum_raw_obc_site_density = zeros(Float64, geometry.nsites)
     sum_charge_wedge = zeros(Float64, length(corr_deltas))
     sum_raw_charge_wedge = zeros(Float64, length(corr_deltas))
     sumsq_charge_wedge = zeros(Float64, length(corr_deltas))
@@ -1452,6 +1614,11 @@ function main(args=ARGS)
         if phase_reweight && (!isfinite(phase_sum) || !isfinite(abs_phase_sum))
             error("phase-reweighted checkpoint is missing determinant-phase accumulators")
         end
+        sum_obc_bonds = get(checkpoint_state, "sum_obc_bonds", sum_obc_bonds)
+        sum_raw_obc_bonds = get(checkpoint_state, "sum_raw_obc_bonds", phase_reweight ? sum_raw_obc_bonds : copy(sum_obc_bonds))
+        sumsq_obc_bonds = get(checkpoint_state, "sumsq_obc_bonds", sumsq_obc_bonds)
+        sum_obc_site_density = get(checkpoint_state, "sum_obc_site_density", sum_obc_site_density)
+        sum_raw_obc_site_density = get(checkpoint_state, "sum_raw_obc_site_density", phase_reweight ? sum_raw_obc_site_density : copy(sum_obc_site_density))
         sum_charge_wedge = get(checkpoint_state, "sum_charge_wedge", sum_charge_wedge)
         sum_raw_charge_wedge = get(checkpoint_state, "sum_raw_charge_wedge", phase_reweight ? sum_raw_charge_wedge : copy(sum_charge_wedge))
         sumsq_charge_wedge = get(checkpoint_state, "sumsq_charge_wedge", sumsq_charge_wedge)
@@ -1493,6 +1660,8 @@ function main(args=ARGS)
                 sum_rem_k, sumsq_rem_k_re, sumsq_rem_k_im,
                 sum_bkt, sumsq_bkt,
                 sum_equal_time, sum_raw_equal_time, sumsq_equal_time,
+                sum_obc_bonds, sum_raw_obc_bonds, sumsq_obc_bonds,
+                sum_obc_site_density, sum_raw_obc_site_density,
                 sum_charge_wedge, sum_raw_charge_wedge, sumsq_charge_wedge,
                 sum_spin_wedge, sum_raw_spin_wedge, sumsq_spin_wedge,
                 sum_charge_structure_raw, sum_raw_charge_structure_raw, sumsq_charge_structure_raw,
@@ -1526,6 +1695,7 @@ function main(args=ARGS)
             "version" => CHECKPOINT_VERSION,
             "created_unix_time" => time(),
             "core_params" => checkpoint_core_params(params),
+            "dependency_provenance" => dependency_provenance(),
             "time_slices" => system.L,
             "volume" => system.V,
             "warmups_completed" => warmups_completed,
@@ -1555,6 +1725,11 @@ function main(args=ARGS)
             "sum_equal_time" => sum_equal_time,
             "sum_raw_equal_time" => sum_raw_equal_time,
             "sumsq_equal_time" => sumsq_equal_time,
+            "sum_obc_bonds" => sum_obc_bonds,
+            "sum_raw_obc_bonds" => sum_raw_obc_bonds,
+            "sumsq_obc_bonds" => sumsq_obc_bonds,
+            "sum_obc_site_density" => sum_obc_site_density,
+            "sum_raw_obc_site_density" => sum_raw_obc_site_density,
             "sum_charge_wedge" => sum_charge_wedge,
             "sum_raw_charge_wedge" => sum_raw_charge_wedge,
             "sumsq_charge_wedge" => sumsq_charge_wedge,
@@ -1667,46 +1842,66 @@ function main(args=ARGS)
             end
 
             if measure_equal_time
-                equal_vals = collect(measure_equal_time_observables(
+                equal_vals = collect(measure_ce_equal_time_observables(
                     system, ρup, ρdn, kx_value=(bkt_vals === nothing ? nothing : bkt_vals[3])
                 ))
                 sum_equal_time .+= sample_phase .* equal_vals
                 sum_raw_equal_time .+= equal_vals
                 sumsq_equal_time .+= equal_vals .^ 2
                 if measure_equal_time_correlations
-                    charge_wedge, spin_wedge = measure_equal_time_charge_spin_wedge!(corr_sampler, ρup, ρdn)
-                    sum_charge_wedge .+= sample_phase .* charge_wedge
-                    sum_raw_charge_wedge .+= charge_wedge
-                    sumsq_charge_wedge .+= charge_wedge .^ 2
-                    sum_spin_wedge .+= sample_phase .* spin_wedge
-                    sum_raw_spin_wedge .+= spin_wedge
-                    sumsq_spin_wedge .+= spin_wedge .^ 2
+                    if direct_obc_bonds
+                        direct = SquareLatticeGeometry.measure_equal_time_observables(
+                            geometry, ρup.ρ₁, ρdn.ρ₁; U=params["u"],
+                        )
+                        bond_values = [
+                            direct.nn_charge_raw,
+                            direct.nn_spin,
+                            direct.nnn_charge_raw,
+                            direct.nnn_spin,
+                            direct.nn_charge_connected,
+                            direct.nnn_charge_connected,
+                        ]
+                        site_density = direct.density_up_site .+ direct.density_dn_site
+                        sum_obc_bonds .+= sample_phase .* bond_values
+                        sum_raw_obc_bonds .+= bond_values
+                        sumsq_obc_bonds .+= bond_values .^ 2
+                        sum_obc_site_density .+= sample_phase .* site_density
+                        sum_raw_obc_site_density .+= site_density
+                    else
+                        charge_wedge, spin_wedge = measure_equal_time_charge_spin_wedge!(corr_sampler, ρup, ρdn)
+                        sum_charge_wedge .+= sample_phase .* charge_wedge
+                        sum_raw_charge_wedge .+= charge_wedge
+                        sumsq_charge_wedge .+= charge_wedge .^ 2
+                        sum_spin_wedge .+= sample_phase .* spin_wedge
+                        sum_raw_spin_wedge .+= spin_wedge
+                        sumsq_spin_wedge .+= spin_wedge .^ 2
 
-                    charge_struct_raw, charge_struct_connected, spin_struct = structure_samples_from_wedge(
-                        charge_wedge, spin_wedge, corr_delta_to_index, q_reps, lx, ly, density_fixed,
-                    )
-                    sum_charge_structure_raw .+= sample_phase .* charge_struct_raw
-                    sum_raw_charge_structure_raw .+= charge_struct_raw
-                    sumsq_charge_structure_raw .+= charge_struct_raw .^ 2
-                    sum_charge_structure_connected .+= sample_phase .* charge_struct_connected
-                    sum_raw_charge_structure_connected .+= charge_struct_connected
-                    sumsq_charge_structure_connected .+= charge_struct_connected .^ 2
-                    sum_spin_structure .+= sample_phase .* spin_struct
-                    sum_raw_spin_structure .+= spin_struct
-                    sumsq_spin_structure .+= spin_struct .^ 2
+                        charge_struct_raw, charge_struct_connected, spin_struct = structure_samples_from_wedge(
+                            charge_wedge, spin_wedge, corr_delta_to_index, q_reps, lx, ly, density_fixed,
+                        )
+                        sum_charge_structure_raw .+= sample_phase .* charge_struct_raw
+                        sum_raw_charge_structure_raw .+= charge_struct_raw
+                        sumsq_charge_structure_raw .+= charge_struct_raw .^ 2
+                        sum_charge_structure_connected .+= sample_phase .* charge_struct_connected
+                        sum_raw_charge_structure_connected .+= charge_struct_connected
+                        sumsq_charge_structure_connected .+= charge_struct_connected .^ 2
+                        sum_spin_structure .+= sample_phase .* spin_struct
+                        sum_raw_spin_structure .+= spin_struct
+                        sumsq_spin_structure .+= spin_struct .^ 2
 
-                    charge_shell_raw, charge_shell_connected, spin_shell = shell_samples_from_wedge(
-                        charge_wedge, spin_wedge, corr_delta_to_index, shells, lx, ly, density_fixed,
-                    )
-                    sum_charge_shell_raw .+= sample_phase .* charge_shell_raw
-                    sum_raw_charge_shell_raw .+= charge_shell_raw
-                    sumsq_charge_shell_raw .+= charge_shell_raw .^ 2
-                    sum_charge_shell_connected .+= sample_phase .* charge_shell_connected
-                    sum_raw_charge_shell_connected .+= charge_shell_connected
-                    sumsq_charge_shell_connected .+= charge_shell_connected .^ 2
-                    sum_spin_shell .+= sample_phase .* spin_shell
-                    sum_raw_spin_shell .+= spin_shell
-                    sumsq_spin_shell .+= spin_shell .^ 2
+                        charge_shell_raw, charge_shell_connected, spin_shell = shell_samples_from_wedge(
+                            charge_wedge, spin_wedge, corr_delta_to_index, shells, lx, ly, density_fixed,
+                        )
+                        sum_charge_shell_raw .+= sample_phase .* charge_shell_raw
+                        sum_raw_charge_shell_raw .+= charge_shell_raw
+                        sumsq_charge_shell_raw .+= charge_shell_raw .^ 2
+                        sum_charge_shell_connected .+= sample_phase .* charge_shell_connected
+                        sum_raw_charge_shell_connected .+= charge_shell_connected
+                        sumsq_charge_shell_connected .+= charge_shell_connected .^ 2
+                        sum_spin_shell .+= sample_phase .* spin_shell
+                        sum_raw_spin_shell .+= spin_shell
+                        sumsq_spin_shell .+= spin_shell .^ 2
+                    end
                 end
             end
 
@@ -1771,59 +1966,76 @@ function main(args=ARGS)
                 signed_sums=sum_equal_time,
             )
             if measure_equal_time_correlations
-                charge_wedge_mean, charge_wedge_err = ratio_mean_err_from_sums(
-                    sum_charge_wedge, sum_raw_charge_wedge, sumsq_charge_wedge, phase_sum, nsamples_total,
-                )
-                spin_wedge_mean, spin_wedge_err = ratio_mean_err_from_sums(
-                    sum_spin_wedge, sum_raw_spin_wedge, sumsq_spin_wedge, phase_sum, nsamples_total,
-                )
-                write_equal_time_wedge_summary(
-                    outdir, params, corr_deltas,
-                    charge_wedge_mean, charge_wedge_err,
-                    spin_wedge_mean, spin_wedge_err,
-                    nsamples_total, batch,
-                    phase_sum, average_phase, phase_reweight,
-                    sum_charge_wedge, sum_spin_wedge,
-                )
+                if direct_obc_bonds
+                    bond_mean, bond_err = ratio_mean_err_from_sums(
+                        sum_obc_bonds, sum_raw_obc_bonds, sumsq_obc_bonds,
+                        phase_sum, nsamples_total,
+                    )
+                    site_density_mean = sum_obc_site_density ./ phase_sum
+                    connected = write_obc_equal_time_bond_summaries(
+                        outdir, params, geometry, equal_mean, equal_err,
+                        bond_mean, bond_err, site_density_mean,
+                        nsamples_total, batch, phase_sum, average_phase, phase_reweight;
+                        bond_signed_sums=sum_obc_bonds,
+                        site_density_signed_sums=sum_obc_site_density,
+                    )
+                    push!(status_parts, string("NNspin=", bond_mean[2]))
+                    push!(status_parts, string("NNcharge_connected=", connected.nn_connected))
+                else
+                    charge_wedge_mean, charge_wedge_err = ratio_mean_err_from_sums(
+                        sum_charge_wedge, sum_raw_charge_wedge, sumsq_charge_wedge, phase_sum, nsamples_total,
+                    )
+                    spin_wedge_mean, spin_wedge_err = ratio_mean_err_from_sums(
+                        sum_spin_wedge, sum_raw_spin_wedge, sumsq_spin_wedge, phase_sum, nsamples_total,
+                    )
+                    write_equal_time_wedge_summary(
+                        outdir, params, corr_deltas,
+                        charge_wedge_mean, charge_wedge_err,
+                        spin_wedge_mean, spin_wedge_err,
+                        nsamples_total, batch,
+                        phase_sum, average_phase, phase_reweight,
+                        sum_charge_wedge, sum_spin_wedge,
+                    )
 
-                charge_struct_raw_mean, charge_struct_raw_err = ratio_mean_err_from_sums(
-                    sum_charge_structure_raw, sum_raw_charge_structure_raw, sumsq_charge_structure_raw, phase_sum, nsamples_total,
-                )
-                charge_struct_conn_mean, charge_struct_conn_err = ratio_mean_err_from_sums(
-                    sum_charge_structure_connected, sum_raw_charge_structure_connected, sumsq_charge_structure_connected, phase_sum, nsamples_total,
-                )
-                spin_struct_mean, spin_struct_err = ratio_mean_err_from_sums(
-                    sum_spin_structure, sum_raw_spin_structure, sumsq_spin_structure, phase_sum, nsamples_total,
-                )
-                write_equal_time_structure_summary(
-                    outdir, params, q_reps,
-                    charge_struct_raw_mean, charge_struct_raw_err,
-                    charge_struct_conn_mean, charge_struct_conn_err,
-                    spin_struct_mean, spin_struct_err,
-                    nsamples_total, batch,
-                    phase_sum, average_phase, phase_reweight,
-                    sum_charge_structure_raw, sum_charge_structure_connected, sum_spin_structure,
-                )
+                    charge_struct_raw_mean, charge_struct_raw_err = ratio_mean_err_from_sums(
+                        sum_charge_structure_raw, sum_raw_charge_structure_raw, sumsq_charge_structure_raw, phase_sum, nsamples_total,
+                    )
+                    charge_struct_conn_mean, charge_struct_conn_err = ratio_mean_err_from_sums(
+                        sum_charge_structure_connected, sum_raw_charge_structure_connected, sumsq_charge_structure_connected, phase_sum, nsamples_total,
+                    )
+                    spin_struct_mean, spin_struct_err = ratio_mean_err_from_sums(
+                        sum_spin_structure, sum_raw_spin_structure, sumsq_spin_structure, phase_sum, nsamples_total,
+                    )
+                    write_equal_time_structure_summary(
+                        outdir, params, q_reps,
+                        charge_struct_raw_mean, charge_struct_raw_err,
+                        charge_struct_conn_mean, charge_struct_conn_err,
+                        spin_struct_mean, spin_struct_err,
+                        nsamples_total, batch,
+                        phase_sum, average_phase, phase_reweight,
+                        sum_charge_structure_raw, sum_charge_structure_connected, sum_spin_structure,
+                    )
 
-                charge_shell_raw_mean, charge_shell_raw_err = ratio_mean_err_from_sums(
-                    sum_charge_shell_raw, sum_raw_charge_shell_raw, sumsq_charge_shell_raw, phase_sum, nsamples_total,
-                )
-                charge_shell_conn_mean, charge_shell_conn_err = ratio_mean_err_from_sums(
-                    sum_charge_shell_connected, sum_raw_charge_shell_connected, sumsq_charge_shell_connected, phase_sum, nsamples_total,
-                )
-                spin_shell_mean, spin_shell_err = ratio_mean_err_from_sums(
-                    sum_spin_shell, sum_raw_spin_shell, sumsq_spin_shell, phase_sum, nsamples_total,
-                )
-                write_equal_time_shell_summary(
-                    outdir, shells,
-                    charge_shell_raw_mean, charge_shell_raw_err,
-                    charge_shell_conn_mean, charge_shell_conn_err,
-                    spin_shell_mean, spin_shell_err,
-                    nsamples_total, batch,
-                    phase_sum, average_phase, phase_reweight,
-                    sum_charge_shell_raw, sum_charge_shell_connected, sum_spin_shell,
-                )
-                push!(status_parts, string("Sspin(qpi,pi)≈", isempty(spin_struct_mean) ? "NA" : maximum(spin_struct_mean)))
+                    charge_shell_raw_mean, charge_shell_raw_err = ratio_mean_err_from_sums(
+                        sum_charge_shell_raw, sum_raw_charge_shell_raw, sumsq_charge_shell_raw, phase_sum, nsamples_total,
+                    )
+                    charge_shell_conn_mean, charge_shell_conn_err = ratio_mean_err_from_sums(
+                        sum_charge_shell_connected, sum_raw_charge_shell_connected, sumsq_charge_shell_connected, phase_sum, nsamples_total,
+                    )
+                    spin_shell_mean, spin_shell_err = ratio_mean_err_from_sums(
+                        sum_spin_shell, sum_raw_spin_shell, sumsq_spin_shell, phase_sum, nsamples_total,
+                    )
+                    write_equal_time_shell_summary(
+                        outdir, shells,
+                        charge_shell_raw_mean, charge_shell_raw_err,
+                        charge_shell_conn_mean, charge_shell_conn_err,
+                        spin_shell_mean, spin_shell_err,
+                        nsamples_total, batch,
+                        phase_sum, average_phase, phase_reweight,
+                        sum_charge_shell_raw, sum_charge_shell_connected, sum_spin_shell,
+                    )
+                    push!(status_parts, string("Sspin(qpi,pi)≈", isempty(spin_struct_mean) ? "NA" : maximum(spin_struct_mean)))
+                end
             end
             push!(status_parts, string("total/site=", equal_mean[3]))
             push!(status_parts, string("docc/site=", equal_mean[4]))

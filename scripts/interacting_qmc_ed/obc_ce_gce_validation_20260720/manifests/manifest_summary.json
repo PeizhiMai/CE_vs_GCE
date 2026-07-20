@@ -1,0 +1,20 @@
+{
+  "boundary": "open",
+  "ce_ed_reference_sha256": "e906d76a24a61570810e22c7e992f2b4794a203700382f0fbbb6ea133dbd9690",
+  "ce_rows": 72,
+  "dtau_values": [
+    0.2,
+    0.1,
+    0.05
+  ],
+  "ed_reference_dir": "docs/validation/obc_ed_validation_20260720",
+  "expected_ranks": 4,
+  "gce_ed_reference_sha256": "7ef67283989107c1f67d2581ee7b87edb63ff9c552bcd0b334dc63002b367059",
+  "gce_rows": 72,
+  "measurements_per_rank": 10000,
+  "physical_conditions_per_ensemble": 12,
+  "run_root": "/home/9pm/nUHubbard_obc_runs/obc_ce_gce_validation_20260720",
+  "schema_version": 1,
+  "seed_replicates": 2,
+  "warmups": 2000
+}

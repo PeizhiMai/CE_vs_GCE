@@ -460,6 +460,252 @@ def combine_equal_time_correlation_files(rank_dirs: List[Path], outdir: Path) ->
     )
 
 
+def combine_obc_equal_time_files(rank_dirs: List[Path], outdir: Path) -> None:
+    """Pool direct real-space OBC bond estimators and emit four primary tables."""
+    bond_filename = "equal_time_bond_observables_qmc.tsv"
+    site_filename = "equal_time_site_density_qmc.tsv"
+    active_dirs = [d for d in rank_dirs if (d / bond_filename).exists()]
+    if not active_dirs:
+        return
+    missing_sites = [str(d) for d in active_dirs if not (d / site_filename).exists()]
+    if missing_sites:
+        raise RuntimeError(
+            "cannot pool OBC connected charge without rank site-density tables: "
+            + ", ".join(missing_sites)
+        )
+
+    rank_records = []
+    for rank_dir in active_dirs:
+        bond_by_shell = {row["shell"]: row for row in read_rows(rank_dir / bond_filename)}
+        site_rows = read_rows(rank_dir / site_filename)
+        if set(bond_by_shell) != {"NN", "NNN"} or not site_rows:
+            raise RuntimeError(f"incomplete OBC direct-estimator tables in {rank_dir}")
+        first = bond_by_shell["NN"]
+        denominator = finite_float(first["phase_sum"])
+        sites = {
+            int(row["site"]): {
+                "x": int(row["x"]),
+                "y": int(row["y"]),
+                "signed": finite_float(
+                    row.get("density_signed_sum", denominator * finite_float(row["density"]))
+                ),
+            }
+            for row in site_rows
+        }
+        shells = {}
+        for shell, row in bond_by_shell.items():
+            shells[shell] = {
+                "raw_signed": finite_float(
+                    row.get(
+                        "charge_corr_raw_signed_sum",
+                        denominator * finite_float(row["charge_corr_raw"]),
+                    )
+                ),
+                "spin_signed": finite_float(
+                    row.get(
+                        "spin_corr_s_s_signed_sum",
+                        denominator * finite_float(row["spin_corr_s_s"]),
+                    )
+                ),
+                "raw_fallback_stderr": finite_float(row["charge_corr_raw_stderr"]),
+                "connected_fallback_stderr": finite_float(row["charge_corr_connected_stderr"]),
+                "spin_fallback_stderr": finite_float(row["spin_corr_s_s_stderr"]),
+                "bond_count": int(row["bond_count"]),
+                "normalization": row["estimator_normalization"],
+            }
+        rank_records.append(
+            {
+                "denominator": denominator,
+                "nsamples": int(first["nsamples"]),
+                "batches": int(first["batches"]),
+                "phase_reweighted": parse_bool(first["phase_reweighted"]),
+                "sites": sites,
+                "shells": shells,
+            }
+        )
+
+    reference_sites = rank_records[0]["sites"]
+    for record in rank_records[1:]:
+        if {
+            site: (entry["x"], entry["y"])
+            for site, entry in record["sites"].items()
+        } != {
+            site: (entry["x"], entry["y"])
+            for site, entry in reference_sites.items()
+        }:
+            raise RuntimeError("OBC rank site ordering mismatch")
+
+    def shell_bonds(shell: str) -> List[Tuple[int, int]]:
+        bonds = []
+        for i in sorted(reference_sites):
+            for j in sorted(reference_sites):
+                if i >= j:
+                    continue
+                dx = abs(reference_sites[i]["x"] - reference_sites[j]["x"])
+                dy = abs(reference_sites[i]["y"] - reference_sites[j]["y"])
+                if (shell == "NN" and dx + dy == 1) or (
+                    shell == "NNN" and (dx, dy) == (1, 1)
+                ):
+                    bonds.append((i, j))
+        return bonds
+
+    def summarize(records, shell: str) -> Dict[str, float]:
+        denominator = sum(float(r["denominator"]) for r in records)
+        if abs(denominator) <= 10 * FLOAT_EPSILON:
+            raise RuntimeError("numerical-zero phase denominator in OBC CE pooling")
+        raw = sum(float(r["shells"][shell]["raw_signed"]) for r in records) / denominator
+        spin = sum(float(r["shells"][shell]["spin_signed"]) for r in records) / denominator
+        site_mean = {
+            site: sum(float(r["sites"][site]["signed"]) for r in records) / denominator
+            for site in reference_sites
+        }
+        bonds = shell_bonds(shell)
+        expected = int(records[0]["shells"][shell]["bond_count"])
+        if len(bonds) != expected:
+            raise RuntimeError(
+                f"OBC {shell} bond reconstruction mismatch: {len(bonds)} != {expected}"
+            )
+        disconnected = sum(site_mean[i] * site_mean[j] for i, j in bonds) / len(bonds)
+        return {"raw": raw, "spin": spin, "connected": raw - disconnected}
+
+    def jackknife_error(shell: str, key: str, fallback_key: str) -> float:
+        if len(rank_records) == 1:
+            return float(rank_records[0]["shells"][shell][fallback_key])
+        leave_one_out = [
+            summarize(rank_records[:idx] + rank_records[idx + 1 :], shell)[key]
+            for idx in range(len(rank_records))
+        ]
+        center = sum(leave_one_out) / len(leave_one_out)
+        return math.sqrt(
+            (len(leave_one_out) - 1)
+            / len(leave_one_out)
+            * sum((value - center) ** 2 for value in leave_one_out)
+        )
+
+    phase_sum = sum(float(r["denominator"]) for r in rank_records)
+    nsamples = sum(int(r["nsamples"]) for r in rank_records)
+    batches = max(int(r["batches"]) for r in rank_records)
+    phase_reweighted = all(bool(r["phase_reweighted"]) for r in rank_records)
+    common_stats = {
+        "nsamples": nsamples,
+        "batches": batches,
+        "nranks": len(rank_records),
+        "phase_reweighted": phase_reweighted,
+        "phase_sum": phase_sum,
+        "average_phase": phase_sum / nsamples,
+    }
+    bond_output_rows = []
+    shell_summaries = {}
+    for shell in ("NN", "NNN"):
+        values = summarize(rank_records, shell)
+        shell_summaries[shell] = values
+        raw_error = jackknife_error(shell, "raw", "raw_fallback_stderr")
+        connected_error = jackknife_error(
+            shell, "connected", "connected_fallback_stderr"
+        )
+        spin_error = jackknife_error(shell, "spin", "spin_fallback_stderr")
+        first_shell = rank_records[0]["shells"][shell]
+        bond_output_rows.append(
+            {
+                "shell": shell,
+                "bond_count": first_shell["bond_count"],
+                "estimator_normalization": first_shell["normalization"],
+                "charge_corr_raw": values["raw"],
+                "charge_corr_raw_stderr": raw_error,
+                "charge_corr_connected": values["connected"],
+                "charge_corr_connected_stderr": connected_error,
+                "spin_corr_s_s": values["spin"],
+                "spin_corr_s_s_stderr": spin_error,
+                "spin_corr_SzSz": 0.25 * values["spin"],
+                "spin_corr_SzSz_stderr": 0.25 * spin_error,
+                **common_stats,
+            }
+        )
+    bond_fields = list(bond_output_rows[0])
+    write_rows(outdir / bond_filename, bond_fields, bond_output_rows)
+
+    denominator = phase_sum
+    site_output_rows = []
+    for site in sorted(reference_sites):
+        density = sum(float(r["sites"][site]["signed"]) for r in rank_records) / denominator
+        if len(rank_records) >= 2:
+            leave_one_out = []
+            for idx in range(len(rank_records)):
+                kept = rank_records[:idx] + rank_records[idx + 1 :]
+                d_loo = sum(float(r["denominator"]) for r in kept)
+                leave_one_out.append(
+                    sum(float(r["sites"][site]["signed"]) for r in kept) / d_loo
+                )
+            center = sum(leave_one_out) / len(leave_one_out)
+            density_error = math.sqrt(
+                (len(leave_one_out) - 1)
+                / len(leave_one_out)
+                * sum((value - center) ** 2 for value in leave_one_out)
+            )
+        else:
+            density_error = float("nan")
+        site_output_rows.append(
+            {
+                "site": site,
+                "x": reference_sites[site]["x"],
+                "y": reference_sites[site]["y"],
+                "density": density,
+                "density_stderr": density_error,
+                **common_stats,
+            }
+        )
+    write_rows(outdir / site_filename, list(site_output_rows[0]), site_output_rows)
+
+    global_rows = read_rows(outdir / "equal_time_observables_qmc.tsv")
+    if len(global_rows) != 1:
+        raise RuntimeError("OBC pooling requires exactly one global equal-time row")
+    global_row = global_rows[0]
+    nn_row = next(row for row in bond_output_rows if row["shell"] == "NN")
+
+    common = {
+        "boundary": "open",
+        "beta": global_row["beta"],
+        "temperature": global_row["temperature"],
+        "nsamples": global_row["nsamples"],
+        "batches": global_row["batches"],
+        "nranks": global_row["nranks"],
+        "phase_reweighted": global_row["phase_reweighted"],
+        "phase_sum": global_row["phase_sum"],
+        "average_phase": global_row["average_phase"],
+    }
+    primary = [
+        (
+            "equal_time_kinetic_per_site_qmc.tsv",
+            "kinetic_per_site",
+            global_row["kinetic_per_site"],
+            global_row["kinetic_stderr"],
+        ),
+        (
+            "equal_time_double_occupancy_per_site_qmc.tsv",
+            "double_occupancy_per_site",
+            global_row["double_occupancy_per_site"],
+            global_row["double_occupancy_stderr"],
+        ),
+        (
+            "equal_time_nn_spin_qmc.tsv",
+            "nn_spin_s_s",
+            nn_row["spin_corr_s_s"],
+            nn_row["spin_corr_s_s_stderr"],
+        ),
+        (
+            "equal_time_nn_connected_charge_qmc.tsv",
+            "nn_connected_charge",
+            nn_row["charge_corr_connected"],
+            nn_row["charge_corr_connected_stderr"],
+        ),
+    ]
+    fieldnames = list(common) + ["observable", "value", "stderr"]
+    for output_name, observable, value, stderr in primary:
+        row = dict(common)
+        row.update({"observable": observable, "value": value, "stderr": stderr})
+        write_rows(outdir / output_name, fieldnames, [row])
+
+
 def main() -> None:
     args = parse_args()
     outdir = args.outdir or args.root_dir
@@ -499,6 +745,7 @@ def main() -> None:
     )
     combine_equal_time_file(rank_dirs, outdir)
     combine_equal_time_correlation_files(rank_dirs, outdir)
+    combine_obc_equal_time_files(rank_dirs, outdir)
     combine_bkt_file(rank_dirs, outdir)
 
 

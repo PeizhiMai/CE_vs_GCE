@@ -1,0 +1,273 @@
+{
+  "checkpoint_resume": {
+    "CE": {
+      "files": {
+        "equal_time_bond_observables_qmc.tsv": {
+          "identical": true,
+          "new_sha256": "215b174cce55688a53be52ab31db206b0d1dc82936676dc67513b2478c9c35e1",
+          "old_sha256": "215b174cce55688a53be52ab31db206b0d1dc82936676dc67513b2478c9c35e1"
+        },
+        "equal_time_double_occupancy_per_site_qmc.tsv": {
+          "identical": true,
+          "new_sha256": "744977505a233e51e00006342da4b888afb11e2379995deb4151873a57c68a46",
+          "old_sha256": "744977505a233e51e00006342da4b888afb11e2379995deb4151873a57c68a46"
+        },
+        "equal_time_kinetic_per_site_qmc.tsv": {
+          "identical": true,
+          "new_sha256": "a6333b7b707eed44129db7fec5dc2acd540b5d7b64c037e2366af349e7f5c26a",
+          "old_sha256": "a6333b7b707eed44129db7fec5dc2acd540b5d7b64c037e2366af349e7f5c26a"
+        },
+        "equal_time_nn_connected_charge_qmc.tsv": {
+          "identical": true,
+          "new_sha256": "29b626d8efc8db98d4797e368fe044927c9b5c76d52471158e0397bbd5751d59",
+          "old_sha256": "29b626d8efc8db98d4797e368fe044927c9b5c76d52471158e0397bbd5751d59"
+        },
+        "equal_time_nn_spin_qmc.tsv": {
+          "identical": true,
+          "new_sha256": "446fbea2d980038efd43701082d4016aeca4a319f91015f6418a98063fc36311",
+          "old_sha256": "446fbea2d980038efd43701082d4016aeca4a319f91015f6418a98063fc36311"
+        },
+        "equal_time_observables_qmc.tsv": {
+          "identical": true,
+          "new_sha256": "ad734bf83d2395cf22f39fb6c6ca5554f8e71f37738c3b67ccdd1501cfdf5679",
+          "old_sha256": "ad734bf83d2395cf22f39fb6c6ca5554f8e71f37738c3b67ccdd1501cfdf5679"
+        },
+        "equal_time_site_density_qmc.tsv": {
+          "identical": true,
+          "new_sha256": "5c550cbec9b8f36933e2f286f72a82f20731f72eaf406e5101c10cc736ffe662",
+          "old_sha256": "5c550cbec9b8f36933e2f286f72a82f20731f72eaf406e5101c10cc736ffe662"
+        }
+      },
+      "final_batches": 2,
+      "final_nsamples": 4,
+      "first_leg_exit_code": 13
+    },
+    "GCE_attractive": {
+      "acceptance": "within floating-point roundoff; counters preserved",
+      "files": {
+        "equal_time_bond_observables_qmc.tsv": {
+          "byte_identical": false,
+          "max_abs_numeric_difference": 3.9968028886505635e-15,
+          "resumed_sha256": "efb286ddf60820a697b86dfb55caf7369709ed51743384bc0be9eee4b03e79a7",
+          "uninterrupted_sha256": "8914c7515eedc92ba7b678ed55e1fe3de8a10ec60371770a2519778898f229f5"
+        },
+        "equal_time_double_occupancy_per_site_qmc.tsv": {
+          "byte_identical": false,
+          "max_abs_numeric_difference": 2.220446049250313e-16,
+          "resumed_sha256": "76ea6675240f78364889cfe6205c4b22f46dccb25ec3b7564636c53963473e73",
+          "uninterrupted_sha256": "e4254557021ad6fd4ff685bfb87d2e8dcf3e78b200013c9afc83be3bdf19efae"
+        },
+        "equal_time_kinetic_per_site_qmc.tsv": {
+          "byte_identical": false,
+          "max_abs_numeric_difference": 4.440892098500626e-16,
+          "resumed_sha256": "ebfd9a370f14777190bc444496aa6f10465ec894275a19e13e9bd8af09b7a676",
+          "uninterrupted_sha256": "74d2c154a597e95a0e795a010e3a63335ac6d24a1dae66b816cef914c5642cb6"
+        },
+        "equal_time_nn_connected_charge_qmc.tsv": {
+          "byte_identical": false,
+          "max_abs_numeric_difference": 2.220446049250313e-16,
+          "resumed_sha256": "03c281c6983e7f39de7a9b0b530d224591fd8dbc9b2f4bdd7ce18d6148097ea5",
+          "uninterrupted_sha256": "d0869d9deeb21fbb3a1080ed30cde899a510f4276228c3c15494ae4671c1e30c"
+        },
+        "equal_time_nn_spin_qmc.tsv": {
+          "byte_identical": false,
+          "max_abs_numeric_difference": 6.245004513516506e-17,
+          "resumed_sha256": "f71f804f09cc09a51d936d176d01981a6008825fa4bcf55c696fec1b3d202cdd",
+          "uninterrupted_sha256": "d51bc5d9fa90d12d8eb280745ea0239a98a5cd0a9b52663e4c80ae3f82261dac"
+        },
+        "equal_time_observables_obc_qmc.tsv": {
+          "byte_identical": false,
+          "max_abs_numeric_difference": 4.884981308350689e-15,
+          "resumed_sha256": "7ddfbb897b6bb94dc0e266f04b9f5add2db3e5d5a4e49cf88ec26cca93d89f4e",
+          "uninterrupted_sha256": "027b7652dc1babc0d2d58547b47acd0b37c3909e8cb2d1c0580e5b68aac1c037"
+        },
+        "global_stats_pID-0.csv": {
+          "byte_identical": true,
+          "max_abs_numeric_difference": 0.0,
+          "resumed_sha256": "43e34498d06a44d9f45e16d30f7f485fe62ba6a8698eb8ddcc49e0cd5ab0a681",
+          "uninterrupted_sha256": "43e34498d06a44d9f45e16d30f7f485fe62ba6a8698eb8ddcc49e0cd5ab0a681"
+        },
+        "local_stats_pID-0.csv": {
+          "byte_identical": true,
+          "max_abs_numeric_difference": 0.0,
+          "resumed_sha256": "fb40541873561eb59cf151e64cbd2673eab8fa46421537cb5c3e3e913db34a97",
+          "uninterrupted_sha256": "fb40541873561eb59cf151e64cbd2673eab8fa46421537cb5c3e3e913db34a97"
+        },
+        "obc_equal_time_rank_pID-0.tsv": {
+          "byte_identical": false,
+          "max_abs_numeric_difference": 1.8207657603852567e-14,
+          "resumed_sha256": "5dda62fd8f097e6948da290804831709a8d97f30a15da0d511b743374f8a9cb1",
+          "uninterrupted_sha256": "c7671fe8073b61a6e62260aed8f20884b1c5c4251218cfd228e4a913db661b01"
+        },
+        "obc_equal_time_site_rank_pID-0.tsv": {
+          "byte_identical": false,
+          "max_abs_numeric_difference": 1.4876988529977098e-14,
+          "resumed_sha256": "40abafceb9f612d9fbf0a7ed1a4a8a28d91f3103e0c87855a0114d5abd6decac",
+          "uninterrupted_sha256": "e4b8e5b4b7c4ecf73b9ca3cae5da0a87ed337b2c8bbdefdac6ea3cc60a845d63"
+        }
+      },
+      "final_nsamples_per_rank": 4,
+      "first_leg_exit_code": 13
+    }
+  },
+  "date": "2026-07-20",
+  "deterministic_tests": {
+    "ED_C4_and_particle_hole_reuse": "PASS (2x2 complete dense oracle, U=-3,+3)"
+  },
+  "end_to_end_two_rank_smoke": {
+    "ce_checkpoint_first_rc": 13,
+    "checks": [
+      "real two-rank MPI world",
+      "CE warmup checkpoint/resume",
+      "attractive-GCE checkpoint/resume",
+      "positive-U spin-HS GCE",
+      "rank/site coverage",
+      "four primary tables"
+    ],
+    "gce_checkpoint_first_rc": 13,
+    "mpi_launcher": "mpiexecjl --project=julia_env (OpenMPI_jll)",
+    "mpi_launcher_project_selected": true,
+    "mpi_library": "Open MPI v5.0.10 (OpenMPI_jll)",
+    "mpi_ranks": 2,
+    "rerun_after_explicit_launcher_fix": "PASS",
+    "rerun_output_root": "results/interacting_qmc_ed/_obc_local_workflow_smoke_explicit_mpi_20260720d",
+    "smoqydqmc_commit": "c5f0c81bc98029bae585e0cb283428e293553999",
+    "smoqydqmc_version": "2.0.12",
+    "status": "PASS"
+  },
+  "julia_version": "1.12.1",
+  "mpi_preference": "OpenMPI_jll",
+  "package_tests": {
+    "CanEnsAFQMC_obc_patch": {
+      "testsets": {
+        "asymmetric": [
+          4,
+          4
+        ],
+        "measurements": [
+          1,
+          1
+        ],
+        "obc_hopping": [
+          13,
+          13
+        ],
+        "symmetric": [
+          4,
+          4
+        ]
+      }
+    },
+    "SmoQyDQMC_obc_fork": {
+      "passed": 66,
+      "total": 66
+    }
+  },
+  "pbc_driver_regressions": {
+    "CE": {
+      "equal_time_charge_spin_wedge_qmc.tsv": {
+        "identical": true,
+        "new_sha256": "c60a688b49057b25592b7c818fb27cc5d075796ab88bc42b8dde83c639bbe633",
+        "old_sha256": "c60a688b49057b25592b7c818fb27cc5d075796ab88bc42b8dde83c639bbe633"
+      },
+      "equal_time_neighbor_shells_qmc.tsv": {
+        "identical": true,
+        "new_sha256": "3d0a5c92fef47bf301740bf01bebdf8f19b6b809823d156a0d915ee312f9c6bc",
+        "old_sha256": "3d0a5c92fef47bf301740bf01bebdf8f19b6b809823d156a0d915ee312f9c6bc"
+      },
+      "equal_time_observables_qmc.tsv": {
+        "identical": true,
+        "new_sha256": "915357d012c49c3c67ca2cb5ebfdcf73e28556d405685eddc3abc0331066b91e",
+        "old_sha256": "915357d012c49c3c67ca2cb5ebfdcf73e28556d405685eddc3abc0331066b91e"
+      },
+      "equal_time_structure_factors_qmc.tsv": {
+        "identical": true,
+        "new_sha256": "ab8b83f2da6bc55e2d87def18f7c91b9c721f1c9732c9c11785ffd612523a51a",
+        "old_sha256": "ab8b83f2da6bc55e2d87def18f7c91b9c721f1c9732c9c11785ffd612523a51a"
+      }
+    },
+    "GCE_attractive": {
+      "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "55730addb3bc6b5d1eb249efeeedb3fbaa9157ec5a6507f60852b461124cb6a9",
+        "old_sha256": "55730addb3bc6b5d1eb249efeeedb3fbaa9157ec5a6507f60852b461124cb6a9"
+      },
+      "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "277232dccfae5c5402bff66cab910fbbfc0b92484a148e9f931879b364d83e47",
+        "old_sha256": "277232dccfae5c5402bff66cab910fbbfc0b92484a148e9f931879b364d83e47"
+      },
+      "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "427e4dbdb6dd4827f4bda254123375d5d172250f7885fa488ba7a0f268b763f6",
+        "old_sha256": "427e4dbdb6dd4827f4bda254123375d5d172250f7885fa488ba7a0f268b763f6"
+      },
+      "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "0335b3ccd9afb244f6d731db5cd21c0b2648a282aa85996fbf8006e5defbf6bd",
+        "old_sha256": "0335b3ccd9afb244f6d731db5cd21c0b2648a282aa85996fbf8006e5defbf6bd"
+      },
+      "global_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "8fa96bfa9984779bdb545f7bedb4c0c5100b216232142f37d79608d0873ab8e5",
+        "old_sha256": "8fa96bfa9984779bdb545f7bedb4c0c5100b216232142f37d79608d0873ab8e5"
+      },
+      "local_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "2b9cfe6946f3b50eadc03585fc6fb3000c6e1b69ec09cfcc1665801a1b4e78d1",
+        "old_sha256": "2b9cfe6946f3b50eadc03585fc6fb3000c6e1b69ec09cfcc1665801a1b4e78d1"
+      }
+    },
+    "GCE_spin_HS": {
+      "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "3cf34feb6223a83a6a7fc091ae83a32a160d8f9578eb5d29a2f78ce2e031dbfe",
+        "old_sha256": "3cf34feb6223a83a6a7fc091ae83a32a160d8f9578eb5d29a2f78ce2e031dbfe"
+      },
+      "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "185ab503f7e0f7df9ec5924be30005415cd1adc51e1e0123d2b3001ddc1afa8a",
+        "old_sha256": "185ab503f7e0f7df9ec5924be30005415cd1adc51e1e0123d2b3001ddc1afa8a"
+      },
+      "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "98c4c454e66b6170c4978a0b85dd763e15f99dec576ebc0d829c5db8304563c9",
+        "old_sha256": "98c4c454e66b6170c4978a0b85dd763e15f99dec576ebc0d829c5db8304563c9"
+      },
+      "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "8f2d49bf9e0516f11002a369b9e468d1b41742444c3b8f299c7cda0fb2d724f2",
+        "old_sha256": "8f2d49bf9e0516f11002a369b9e468d1b41742444c3b8f299c7cda0fb2d724f2"
+      },
+      "global_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "64881263cb26ea2137bf2a34f684ff4306fec98a237b7593356f9eac48429610",
+        "old_sha256": "64881263cb26ea2137bf2a34f684ff4306fec98a237b7593356f9eac48429610"
+      },
+      "local_stats_pID-0.csv": {
+        "identical": true,
+        "new_sha256": "5ce5e6c4259c216b90faf65732dfc29fdcca09b264009a2259fef4424dd10e39",
+        "old_sha256": "5ce5e6c4259c216b90faf65732dfc29fdcca09b264009a2259fef4424dd10e39"
+      }
+    }
+  },
+  "project_tests": {
+    "ce_obc_combiner": "pass",
+    "shared_geometry": {
+      "passed": 20,
+      "total": 20
+    },
+    "smoqy_obc_accumulator_mpi_rank0": {
+      "passed": 21,
+      "total": 21
+    },
+    "smoqy_obc_accumulator_mpi_rank1": {
+      "passed": 15,
+      "total": 15
+    },
+    "smoqy_obc_accumulator_serial": {
+      "passed": 20,
+      "total": 20
+    }
+  }
+}

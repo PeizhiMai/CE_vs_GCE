@@ -1,0 +1,467 @@
+{
+  "accepted": true,
+  "blas_for_comparison": "OpenBLAS",
+  "cross_version": {
+    "attr_resumed": {
+      "csv_count": 6,
+      "files": {
+        "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "5000e95b58f1ad1025f7f6b492bb0194eb10c87bbfd77ca5c9c3d9ae78c99fba",
+          "v2.0.12_sha256": "5000e95b58f1ad1025f7f6b492bb0194eb10c87bbfd77ca5c9c3d9ae78c99fba"
+        },
+        "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "82b42de5c717f0f9803071e2392888c5f894ef02929ba5342a957b283326b88c",
+          "v2.0.12_sha256": "82b42de5c717f0f9803071e2392888c5f894ef02929ba5342a957b283326b88c"
+        },
+        "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "8de112cfabb54b78b64beb112862514462d1c330b8206b148d1d35d032d973ee",
+          "v2.0.12_sha256": "8de112cfabb54b78b64beb112862514462d1c330b8206b148d1d35d032d973ee"
+        },
+        "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "e9b1c34754ae1aa5d12d846d78c8f9ebd85a44fab082a2462f83bb0253b5ae65",
+          "v2.0.12_sha256": "e9b1c34754ae1aa5d12d846d78c8f9ebd85a44fab082a2462f83bb0253b5ae65"
+        },
+        "global_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "3f57c06561611524981698405481506697a21276659227f949d4a1279c6fd31f",
+          "v2.0.12_sha256": "3f57c06561611524981698405481506697a21276659227f949d4a1279c6fd31f"
+        },
+        "local_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "911ceb13223cba0bf0be8bc45011fbe853e61d42c19856c5bd0cc925b8298f20",
+          "v2.0.12_sha256": "911ceb13223cba0bf0be8bc45011fbe853e61d42c19856c5bd0cc925b8298f20"
+        }
+      },
+      "geometry_model_summary_byte_identical": true,
+      "scientific_csv_byte_identical": true
+    },
+    "attr_uninterrupted": {
+      "csv_count": 6,
+      "files": {
+        "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "5000e95b58f1ad1025f7f6b492bb0194eb10c87bbfd77ca5c9c3d9ae78c99fba",
+          "v2.0.12_sha256": "5000e95b58f1ad1025f7f6b492bb0194eb10c87bbfd77ca5c9c3d9ae78c99fba"
+        },
+        "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "82b42de5c717f0f9803071e2392888c5f894ef02929ba5342a957b283326b88c",
+          "v2.0.12_sha256": "82b42de5c717f0f9803071e2392888c5f894ef02929ba5342a957b283326b88c"
+        },
+        "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "8de112cfabb54b78b64beb112862514462d1c330b8206b148d1d35d032d973ee",
+          "v2.0.12_sha256": "8de112cfabb54b78b64beb112862514462d1c330b8206b148d1d35d032d973ee"
+        },
+        "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "e9b1c34754ae1aa5d12d846d78c8f9ebd85a44fab082a2462f83bb0253b5ae65",
+          "v2.0.12_sha256": "e9b1c34754ae1aa5d12d846d78c8f9ebd85a44fab082a2462f83bb0253b5ae65"
+        },
+        "global_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "3f57c06561611524981698405481506697a21276659227f949d4a1279c6fd31f",
+          "v2.0.12_sha256": "3f57c06561611524981698405481506697a21276659227f949d4a1279c6fd31f"
+        },
+        "local_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "911ceb13223cba0bf0be8bc45011fbe853e61d42c19856c5bd0cc925b8298f20",
+          "v2.0.12_sha256": "911ceb13223cba0bf0be8bc45011fbe853e61d42c19856c5bd0cc925b8298f20"
+        }
+      },
+      "geometry_model_summary_byte_identical": true,
+      "scientific_csv_byte_identical": true
+    },
+    "spin_resumed": {
+      "csv_count": 6,
+      "files": {
+        "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "e1978240a979fcc2adfe829ed431fa62b7cbcb3ee27fcfd43aa19edfa1b18a43",
+          "v2.0.12_sha256": "e1978240a979fcc2adfe829ed431fa62b7cbcb3ee27fcfd43aa19edfa1b18a43"
+        },
+        "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "dba9a54e0da1645ac67a9d34b12f70fe46747da40c128053e1a7924fc3f4b6aa",
+          "v2.0.12_sha256": "dba9a54e0da1645ac67a9d34b12f70fe46747da40c128053e1a7924fc3f4b6aa"
+        },
+        "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "06a98cfbc3218ff66f6256a540dad4c0b5520f6440d39a088495dcdfe5434ad4",
+          "v2.0.12_sha256": "06a98cfbc3218ff66f6256a540dad4c0b5520f6440d39a088495dcdfe5434ad4"
+        },
+        "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "9ca08d661c06a13d400b8dd329bc34648740aa09987984f1b9e85797faa23301",
+          "v2.0.12_sha256": "9ca08d661c06a13d400b8dd329bc34648740aa09987984f1b9e85797faa23301"
+        },
+        "global_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "8c6a7845f94ac202f25d38834c9fed76bcd257a06cc68476259f1a0c8020c299",
+          "v2.0.12_sha256": "8c6a7845f94ac202f25d38834c9fed76bcd257a06cc68476259f1a0c8020c299"
+        },
+        "local_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "fa154408adcbdafc8f4fb5738a80403e605ddb6567aa4886cccb991f5ddd3c38",
+          "v2.0.12_sha256": "fa154408adcbdafc8f4fb5738a80403e605ddb6567aa4886cccb991f5ddd3c38"
+        }
+      },
+      "geometry_model_summary_byte_identical": true,
+      "scientific_csv_byte_identical": true
+    },
+    "spin_uninterrupted": {
+      "csv_count": 6,
+      "files": {
+        "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "e1978240a979fcc2adfe829ed431fa62b7cbcb3ee27fcfd43aa19edfa1b18a43",
+          "v2.0.12_sha256": "e1978240a979fcc2adfe829ed431fa62b7cbcb3ee27fcfd43aa19edfa1b18a43"
+        },
+        "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "dba9a54e0da1645ac67a9d34b12f70fe46747da40c128053e1a7924fc3f4b6aa",
+          "v2.0.12_sha256": "dba9a54e0da1645ac67a9d34b12f70fe46747da40c128053e1a7924fc3f4b6aa"
+        },
+        "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "06a98cfbc3218ff66f6256a540dad4c0b5520f6440d39a088495dcdfe5434ad4",
+          "v2.0.12_sha256": "06a98cfbc3218ff66f6256a540dad4c0b5520f6440d39a088495dcdfe5434ad4"
+        },
+        "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "9ca08d661c06a13d400b8dd329bc34648740aa09987984f1b9e85797faa23301",
+          "v2.0.12_sha256": "9ca08d661c06a13d400b8dd329bc34648740aa09987984f1b9e85797faa23301"
+        },
+        "global_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "8c6a7845f94ac202f25d38834c9fed76bcd257a06cc68476259f1a0c8020c299",
+          "v2.0.12_sha256": "8c6a7845f94ac202f25d38834c9fed76bcd257a06cc68476259f1a0c8020c299"
+        },
+        "local_stats_pID-0.csv": {
+          "identical": true,
+          "v2.0.11_sha256": "fa154408adcbdafc8f4fb5738a80403e605ddb6567aa4886cccb991f5ddd3c38",
+          "v2.0.12_sha256": "fa154408adcbdafc8f4fb5738a80403e605ddb6567aa4886cccb991f5ddd3c38"
+        }
+      },
+      "geometry_model_summary_byte_identical": true,
+      "scientific_csv_byte_identical": true
+    }
+  },
+  "date": "2026-07-20",
+  "families": {
+    "attr": {
+      "v2011": {
+        "csv_count": 6,
+        "files": {
+          "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "5000e95b58f1ad1025f7f6b492bb0194eb10c87bbfd77ca5c9c3d9ae78c99fba",
+            "uninterrupted_sha256": "5000e95b58f1ad1025f7f6b492bb0194eb10c87bbfd77ca5c9c3d9ae78c99fba"
+          },
+          "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "82b42de5c717f0f9803071e2392888c5f894ef02929ba5342a957b283326b88c",
+            "uninterrupted_sha256": "82b42de5c717f0f9803071e2392888c5f894ef02929ba5342a957b283326b88c"
+          },
+          "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "8de112cfabb54b78b64beb112862514462d1c330b8206b148d1d35d032d973ee",
+            "uninterrupted_sha256": "8de112cfabb54b78b64beb112862514462d1c330b8206b148d1d35d032d973ee"
+          },
+          "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "e9b1c34754ae1aa5d12d846d78c8f9ebd85a44fab082a2462f83bb0253b5ae65",
+            "uninterrupted_sha256": "e9b1c34754ae1aa5d12d846d78c8f9ebd85a44fab082a2462f83bb0253b5ae65"
+          },
+          "global_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "3f57c06561611524981698405481506697a21276659227f949d4a1279c6fd31f",
+            "uninterrupted_sha256": "3f57c06561611524981698405481506697a21276659227f949d4a1279c6fd31f"
+          },
+          "local_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "911ceb13223cba0bf0be8bc45011fbe853e61d42c19856c5bd0cc925b8298f20",
+            "uninterrupted_sha256": "911ceb13223cba0bf0be8bc45011fbe853e61d42c19856c5bd0cc925b8298f20"
+          }
+        },
+        "final_N_measurements": 4,
+        "final_N_therm": 4,
+        "first_leg_exit_code": 13,
+        "model_summary_byte_identical": true,
+        "model_summary_sha256": "3c40672a8d0675e5f2905e54a726b1832ea91b37e8f4e17b5b7a0d0a10974a08",
+        "observed_package_version": "2.0.11",
+        "package_version": "2.0.11",
+        "resume_csv_byte_identical": true,
+        "stable_metadata_equal": true,
+        "stable_metadata_fields": {
+          "L_tau": true,
+          "Ly": true,
+          "N_bins": true,
+          "N_measurements": true,
+          "N_therm": true,
+          "N_updates": true,
+          "beta": true,
+          "beta_requested": true,
+          "boundary": true,
+          "checkerboard": true,
+          "geometry_Lx": true,
+          "geometry_Ly": true,
+          "geometry_boundary": true,
+          "geometry_connected_charge_definition": true,
+          "geometry_double_occupancy_normalization": true,
+          "geometry_kinetic_normalization": true,
+          "geometry_nn_bond_count": true,
+          "geometry_nn_normalization": true,
+          "geometry_nnn_bond_count": true,
+          "geometry_nnn_normalization": true,
+          "geometry_periodic_x": true,
+          "geometry_periodic_y": true,
+          "geometry_site_count": true,
+          "geometry_site_ordering": true,
+          "geometry_spin_definition": true,
+          "measurement_profile": true,
+          "ph_sym_form": true,
+          "rank_seed": true,
+          "seed": true,
+          "symmetric": true
+        }
+      },
+      "v2012": {
+        "csv_count": 6,
+        "files": {
+          "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "5000e95b58f1ad1025f7f6b492bb0194eb10c87bbfd77ca5c9c3d9ae78c99fba",
+            "uninterrupted_sha256": "5000e95b58f1ad1025f7f6b492bb0194eb10c87bbfd77ca5c9c3d9ae78c99fba"
+          },
+          "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "82b42de5c717f0f9803071e2392888c5f894ef02929ba5342a957b283326b88c",
+            "uninterrupted_sha256": "82b42de5c717f0f9803071e2392888c5f894ef02929ba5342a957b283326b88c"
+          },
+          "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "8de112cfabb54b78b64beb112862514462d1c330b8206b148d1d35d032d973ee",
+            "uninterrupted_sha256": "8de112cfabb54b78b64beb112862514462d1c330b8206b148d1d35d032d973ee"
+          },
+          "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "e9b1c34754ae1aa5d12d846d78c8f9ebd85a44fab082a2462f83bb0253b5ae65",
+            "uninterrupted_sha256": "e9b1c34754ae1aa5d12d846d78c8f9ebd85a44fab082a2462f83bb0253b5ae65"
+          },
+          "global_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "3f57c06561611524981698405481506697a21276659227f949d4a1279c6fd31f",
+            "uninterrupted_sha256": "3f57c06561611524981698405481506697a21276659227f949d4a1279c6fd31f"
+          },
+          "local_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "911ceb13223cba0bf0be8bc45011fbe853e61d42c19856c5bd0cc925b8298f20",
+            "uninterrupted_sha256": "911ceb13223cba0bf0be8bc45011fbe853e61d42c19856c5bd0cc925b8298f20"
+          }
+        },
+        "final_N_measurements": 4,
+        "final_N_therm": 4,
+        "first_leg_exit_code": 13,
+        "model_summary_byte_identical": true,
+        "model_summary_sha256": "3c40672a8d0675e5f2905e54a726b1832ea91b37e8f4e17b5b7a0d0a10974a08",
+        "observed_package_version": "2.0.12",
+        "package_version": "2.0.12",
+        "resume_csv_byte_identical": true,
+        "stable_metadata_equal": true,
+        "stable_metadata_fields": {
+          "L_tau": true,
+          "Ly": true,
+          "N_bins": true,
+          "N_measurements": true,
+          "N_therm": true,
+          "N_updates": true,
+          "beta": true,
+          "beta_requested": true,
+          "boundary": true,
+          "checkerboard": true,
+          "geometry_Lx": true,
+          "geometry_Ly": true,
+          "geometry_boundary": true,
+          "geometry_connected_charge_definition": true,
+          "geometry_double_occupancy_normalization": true,
+          "geometry_kinetic_normalization": true,
+          "geometry_nn_bond_count": true,
+          "geometry_nn_normalization": true,
+          "geometry_nnn_bond_count": true,
+          "geometry_nnn_normalization": true,
+          "geometry_periodic_x": true,
+          "geometry_periodic_y": true,
+          "geometry_site_count": true,
+          "geometry_site_ordering": true,
+          "geometry_spin_definition": true,
+          "measurement_profile": true,
+          "ph_sym_form": true,
+          "rank_seed": true,
+          "seed": true,
+          "symmetric": true
+        }
+      }
+    },
+    "spin": {
+      "v2011": {
+        "csv_count": 6,
+        "files": {
+          "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "e1978240a979fcc2adfe829ed431fa62b7cbcb3ee27fcfd43aa19edfa1b18a43",
+            "uninterrupted_sha256": "e1978240a979fcc2adfe829ed431fa62b7cbcb3ee27fcfd43aa19edfa1b18a43"
+          },
+          "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "dba9a54e0da1645ac67a9d34b12f70fe46747da40c128053e1a7924fc3f4b6aa",
+            "uninterrupted_sha256": "dba9a54e0da1645ac67a9d34b12f70fe46747da40c128053e1a7924fc3f4b6aa"
+          },
+          "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "06a98cfbc3218ff66f6256a540dad4c0b5520f6440d39a088495dcdfe5434ad4",
+            "uninterrupted_sha256": "06a98cfbc3218ff66f6256a540dad4c0b5520f6440d39a088495dcdfe5434ad4"
+          },
+          "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "9ca08d661c06a13d400b8dd329bc34648740aa09987984f1b9e85797faa23301",
+            "uninterrupted_sha256": "9ca08d661c06a13d400b8dd329bc34648740aa09987984f1b9e85797faa23301"
+          },
+          "global_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "8c6a7845f94ac202f25d38834c9fed76bcd257a06cc68476259f1a0c8020c299",
+            "uninterrupted_sha256": "8c6a7845f94ac202f25d38834c9fed76bcd257a06cc68476259f1a0c8020c299"
+          },
+          "local_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "fa154408adcbdafc8f4fb5738a80403e605ddb6567aa4886cccb991f5ddd3c38",
+            "uninterrupted_sha256": "fa154408adcbdafc8f4fb5738a80403e605ddb6567aa4886cccb991f5ddd3c38"
+          }
+        },
+        "final_N_measurements": 4,
+        "final_N_therm": 4,
+        "first_leg_exit_code": 13,
+        "model_summary_byte_identical": true,
+        "model_summary_sha256": "58bab25db824229ac9c65ae08d7142766b91428ccb9da0fbd13d4e44f8cbf9fe",
+        "observed_package_version": "2.0.11",
+        "package_version": "2.0.11",
+        "resume_csv_byte_identical": true,
+        "stable_metadata_equal": true,
+        "stable_metadata_fields": {
+          "L_tau": true,
+          "Ly": true,
+          "N_bins": true,
+          "N_measurements": true,
+          "N_therm": true,
+          "N_updates": true,
+          "beta": true,
+          "beta_requested": true,
+          "boundary": true,
+          "checkerboard": true,
+          "geometry_Lx": true,
+          "geometry_Ly": true,
+          "geometry_boundary": true,
+          "geometry_connected_charge_definition": true,
+          "geometry_double_occupancy_normalization": true,
+          "geometry_kinetic_normalization": true,
+          "geometry_nn_bond_count": true,
+          "geometry_nn_normalization": true,
+          "geometry_nnn_bond_count": true,
+          "geometry_nnn_normalization": true,
+          "geometry_periodic_x": true,
+          "geometry_periodic_y": true,
+          "geometry_site_count": true,
+          "geometry_site_ordering": true,
+          "geometry_spin_definition": true,
+          "measurement_profile": true,
+          "ph_sym_form": true,
+          "rank_seed": true,
+          "seed": true,
+          "symmetric": true
+        }
+      },
+      "v2012": {
+        "csv_count": 6,
+        "files": {
+          "equal-time/density/density_momentum_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "e1978240a979fcc2adfe829ed431fa62b7cbcb3ee27fcfd43aa19edfa1b18a43",
+            "uninterrupted_sha256": "e1978240a979fcc2adfe829ed431fa62b7cbcb3ee27fcfd43aa19edfa1b18a43"
+          },
+          "equal-time/density/density_position_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "dba9a54e0da1645ac67a9d34b12f70fe46747da40c128053e1a7924fc3f4b6aa",
+            "uninterrupted_sha256": "dba9a54e0da1645ac67a9d34b12f70fe46747da40c128053e1a7924fc3f4b6aa"
+          },
+          "equal-time/spin_z/spin_z_momentum_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "06a98cfbc3218ff66f6256a540dad4c0b5520f6440d39a088495dcdfe5434ad4",
+            "uninterrupted_sha256": "06a98cfbc3218ff66f6256a540dad4c0b5520f6440d39a088495dcdfe5434ad4"
+          },
+          "equal-time/spin_z/spin_z_position_equal-time_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "9ca08d661c06a13d400b8dd329bc34648740aa09987984f1b9e85797faa23301",
+            "uninterrupted_sha256": "9ca08d661c06a13d400b8dd329bc34648740aa09987984f1b9e85797faa23301"
+          },
+          "global_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "8c6a7845f94ac202f25d38834c9fed76bcd257a06cc68476259f1a0c8020c299",
+            "uninterrupted_sha256": "8c6a7845f94ac202f25d38834c9fed76bcd257a06cc68476259f1a0c8020c299"
+          },
+          "local_stats_pID-0.csv": {
+            "identical": true,
+            "resumed_sha256": "fa154408adcbdafc8f4fb5738a80403e605ddb6567aa4886cccb991f5ddd3c38",
+            "uninterrupted_sha256": "fa154408adcbdafc8f4fb5738a80403e605ddb6567aa4886cccb991f5ddd3c38"
+          }
+        },
+        "final_N_measurements": 4,
+        "final_N_therm": 4,
+        "first_leg_exit_code": 13,
+        "model_summary_byte_identical": true,
+        "model_summary_sha256": "58bab25db824229ac9c65ae08d7142766b91428ccb9da0fbd13d4e44f8cbf9fe",
+        "observed_package_version": "2.0.12",
+        "package_version": "2.0.12",
+        "resume_csv_byte_identical": true,
+        "stable_metadata_equal": true,
+        "stable_metadata_fields": {
+          "L_tau": true,
+          "Ly": true,
+          "N_bins": true,
+          "N_measurements": true,
+          "N_therm": true,
+          "N_updates": true,
+          "beta": true,
+          "beta_requested": true,
+          "boundary": true,
+          "checkerboard": true,
+          "geometry_Lx": true,
+          "geometry_Ly": true,
+          "geometry_boundary": true,
+          "geometry_connected_charge_definition": true,
+          "geometry_double_occupancy_normalization": true,
+          "geometry_kinetic_normalization": true,
+          "geometry_nn_bond_count": true,
+          "geometry_nn_normalization": true,
+          "geometry_nnn_bond_count": true,
+          "geometry_nnn_normalization": true,
+          "geometry_periodic_x": true,
+          "geometry_periodic_y": true,
+          "geometry_site_count": true,
+          "geometry_site_ordering": true,
+          "geometry_spin_definition": true,
+          "measurement_profile": true,
+          "ph_sym_form": true,
+          "rank_seed": true,
+          "seed": true,
+          "symmetric": true
+        }
+      }
+    }
+  },
+  "first_leg_expected_exit_code": 13,
+  "julia_version": "1.12.1"
+}

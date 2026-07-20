@@ -1,0 +1,13 @@
+{
+  "accepted": true,
+  "boltzmann_tolerance": 1e-08,
+  "boundary": "open",
+  "ce_conditions": 12,
+  "eigen_residual_tolerance": 1e-08,
+  "failures": [],
+  "gce_conditions": 12,
+  "geometry_checks": 2,
+  "hamiltonian": "H_std=K+U*D; GCE uses U*(V/4-N/2)-mu*N sector shift",
+  "schema_version": 2,
+  "u0_checks": 4
+}
