@@ -1,4 +1,4 @@
-# # Attractive square Hubbard Model with Checkpointing
+# # Square Hubbard Model with Spin-Channel Hirsch HS and Checkpointing
 # In this tutorial we demonstrate how to introduce checkpointing to the previous
 # [1b) Square Hubbard Model with MPI Parallelization](@ref) tutorial, allowing for simulations to be
 # resumed if terminated prior to completion.
@@ -191,7 +191,7 @@ function run_simulation(
     symmetric = false, # Whether symmetric propagator definition is used.
     checkerboard = false, # Whether checkerboard approximation is used.
     seed = abs(rand(Int)), # Seed for random number generator.
-    filepath = joinpath(@__DIR__, "..", "..", "results", "interacting_qmc_ed", "smoqydqmc_attractive_hubbard_checkpoint"), # Filepath to where data folder will be created.
+    filepath = joinpath(@__DIR__, "..", "..", "results", "interacting_qmc_ed", "smoqydqmc_hubbard_spin_hs_checkpoint"), # Filepath to where data folder will be created.
     measurement_profile = "full", # "full" production measurements, "equal-time-only" for CE/GCE equal-time comparisons, "density-only" for chemical-potential tuning, or autocorrelation probes.
     use_reflection_update = false, # Match older three-band jobs: no reflection/global update by default.
     update_stabilization_frequency = false, # If true, adapt n_stab downward when δG exceeds δG_max.
@@ -232,7 +232,7 @@ function run_simulation(
     checkpoint_freq = checkpoint_freq * 60.0^2
 
     ## Construct the foldername the data will be written to.
-    datafolder_prefix = @sprintf "attractive_hubbard_rect_U%.2f_tp%.2f_mu%.2f_Lx%d_Ly%d_b%.2f" U t′ μ L Ly β
+    datafolder_prefix = @sprintf "hubbard_spin_hs_rect_U%.2f_tp%.2f_mu%.2f_Lx%d_Ly%d_b%.2f" U t′ μ L Ly β
 
     ## Get MPI process ID.
     pID = MPI.Comm_rank(comm)
@@ -329,6 +329,7 @@ function run_simulation(
         metadata["Ly"] = Ly
         metadata["seed"] = seed
         metadata["rank_seed"] = rank_seed
+        metadata["hst_channel"] = "spin_hirsch"
         metadata["local_acceptance_rate"] = 0.0
         metadata["reflection_acceptance_rate"] = 0.0
 
@@ -460,9 +461,9 @@ function run_simulation(
             rng = rng
         )
 
-        ## Apply density-channel Hubbard-Stratonovich (HS) transformation to decouple the attractive Hubbard interaction,
-        ## and initialize the corresponding HS fields that will be sampled in the DQMC simulation.
-        hst_parameters = HubbardDensityHirschHST(
+        ## Apply spin-channel Hirsch Hubbard-Stratonovich (HS) transformation to decouple the Hubbard interaction.
+        ## This is real for repulsive U >= 0 and avoids the complex density-HS phase problem for U > 0.
+        hst_parameters = HubbardSpinHirschHST(
             β = β, Δτ = Δτ,
             hubbard_parameters = hubbard_parameters,
             rng = rng
@@ -601,14 +602,15 @@ function run_simulation(
 # No changes need to made to this section of the code from the previous [1a) Square Hubbard Model](@ref) tutorial.
 
     ## Allocate FermionPathIntegral type for both the spin-up and spin-down electrons.
-    ## Density-channel Hirsch fields are real for U <= 0 and complex for U > 0.
+    ## Spin-channel Hirsch fields are real for U >= 0 and complex for U < 0.
+    ## Allocate complex matrices only for attractive-U spin-HS; repulsive U uses real matrices.
     fermion_path_integral_up = FermionPathIntegral(
         tight_binding_parameters = tight_binding_parameters, β = β, Δτ = Δτ,
-        forced_complex_potential = (U > 0), forced_complex_kinetic = false
+        forced_complex_potential = (U < 0), forced_complex_kinetic = false
     )
     fermion_path_integral_dn = FermionPathIntegral(
         tight_binding_parameters = tight_binding_parameters, β = β, Δτ = Δτ,
-        forced_complex_potential = (U > 0), forced_complex_kinetic = false
+        forced_complex_potential = (U < 0), forced_complex_kinetic = false
     )
 
     ## Initialize FermionPathIntegral type for both the spin-up and spin-down electrons to account for Hubbard interaction.
@@ -925,7 +927,7 @@ end # end of run_simulation function
 # the `checkpoint_freq` and `runtime_limit` values.
 # Therefore, a simulation can be run with the command
 # ```bash
-# ./scripts/run_julia_local.sh --project=julia_env scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard_checkpoint.jl 0 -4.0 0.0 0.0 8 4.0 2000 2000 40 5 1.0
+# ./scripts/run_julia_local.sh --project=julia_env scripts/interacting_qmc_ed/run_smoqydqmc_hubbard_spin_hs_checkpoint.jl 0 -4.0 0.0 0.0 8 4.0 2000 2000 40 5 1.0
 # ```
 # or
 # ```bash
@@ -963,7 +965,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         checkpoint_freq = parse(Float64, ARGS[11]), # Frequency with which checkpoint files are written in hours.
         runtime_limit = length(ARGS) >= 12 ? parse(Float64, ARGS[12]) : Inf, # Runtime limit in hours.
         ph_sym_form = length(ARGS) >= 13 ? parse(Bool, ARGS[13]) : true,
-        filepath = length(ARGS) >= 14 ? ARGS[14] : joinpath(@__DIR__, "..", "..", "results", "interacting_qmc_ed", "smoqydqmc_attractive_hubbard_checkpoint"),
+        filepath = length(ARGS) >= 14 ? ARGS[14] : joinpath(@__DIR__, "..", "..", "results", "interacting_qmc_ed", "smoqydqmc_hubbard_spin_hs_checkpoint"),
         Ly = length(ARGS) >= 15 ? parse(Int, ARGS[15]) : parse(Int, ARGS[5]),
         measurement_profile = length(ARGS) >= 16 ? ARGS[16] : "full",
         Δτ = length(ARGS) >= 17 ? parse(Float64, ARGS[17]) : 0.05,

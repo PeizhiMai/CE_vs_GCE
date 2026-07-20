@@ -1,0 +1,4 @@
+__pycache__/
+status_source/
+manifests/*followup_*.tsv
+manifests/gce_prod_L6_*_confirmed.tsv

@@ -1,5 +1,16 @@
 #!/usr/bin/env julia
 
+# Load MKL before MPI/LinearAlgebra when available so each independent CE chain
+# uses the faster LAPACK eigensolver in the canonical Metropolis acceptance
+# ratio.  Set CE_USE_MKL=false to force the default backend.
+if lowercase(get(ENV, "CE_USE_MKL", "true")) != "false" && Base.find_package("MKL") !== nothing
+    try
+        @eval using MKL
+    catch err
+        @warn "CE_USE_MKL requested, but MKL could not be loaded; falling back to default BLAS/LAPACK" exception=(err, catch_backtrace())
+    end
+end
+
 using MPI
 using TOML
 using Printf

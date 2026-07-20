@@ -1,0 +1,210 @@
+diff --git a/src/CanEnsAFQMC.jl b/src/CanEnsAFQMC.jl
+index f161029..8ca78ca 100644
+--- a/src/CanEnsAFQMC.jl
++++ b/src/CanEnsAFQMC.jl
+@@ -27,8 +27,12 @@ module CanEnsAFQMC
+     # Measurements
+     export DensityMatrix, update!
+     include("./measurements/density_matrix.jl")
++    export measure_Energy
++    include("./measurements/energy.jl")
+     export CorrFuncSampler, measure_ChargeCorr, measure_SpinCorr, measure_PairCorr
+     include("./measurements/corr_funcs.jl")
++    export current_operator_x, kinetic_operator_x, measure_Bilinear, measure_BilinearStaticResponse, measure_CurrentResponse, measure_KxPerSite
++    include("./measurements/current_response.jl")
+     export PnSampler, measure_Pn
+     include("./measurements/prob_dist.jl")
+ end
+diff --git a/src/utils/ce_recursion.jl b/src/utils/ce_recursion.jl
+index ecfb74d..bb0710d 100644
+--- a/src/utils/ce_recursion.jl
++++ b/src/utils/ce_recursion.jl
+@@ -35,7 +35,14 @@ function compute_pf_recursion(
+
+         return abslogZ, sgnlogZ
+     elseif N == Ns - 1
+-        logZ = sum(log.(λ)) - log(sum(λ))
++        # e_{Ns-1}(λ) is the sum of all products with one eigenvalue omitted:
++        #
++        #     e_{Ns-1}(λ) = prod(λ) * sum(1 ./ λ)
++        #
++        # The previous `prod(λ) / sum(λ)` expression is not the elementary
++        # symmetric coefficient and gives the wrong Metropolis weight in
++        # high-density sectors such as a 2x2 (Nup,Ndn)=(3,3) debug run.
++        logZ = sum(log.(λ)) + log(sum(1 ./ λ))
+         abslogZ = real(logZ)
+         sgnlogZ = exp(imag(logZ)im)
+
+diff --git a/src/measurements/current_response.jl b/src/measurements/current_response.jl
+new file mode 100644
+index 0000000..5909d05
+--- /dev/null
++++ b/src/measurements/current_response.jl
+@@ -0,0 +1,167 @@
++"""
++    Static current-response measurements for 2D Hubbard systems
++"""
++
++@inline function site_index_2d(x::Int, y::Int, lx::Int)
++    return x + 1 + y * lx
++end
++
++"""
++    current_operator_x(system::System; qx=0.0, qy=0.0)
++
++Construct the single-spin Fourier-space x-current operator
++
++    J_x(q) = Σ_r exp(i q·r) i t [ c†_{r+x} c_r - c†_r c_{r+x} ]
++
++for the square-lattice geometry used by the current Hubbard drivers.
++"""
++function current_operator_x(system::System; qx::Float64=0.0, qy::Float64=0.0)
++    lx, ly, lz = system.Ns
++    lz == 1 || error("current_operator_x currently assumes a 2D lattice with Ns=(Lx,Ly,1)")
++    V = system.V
++    J = zeros(ComplexF64, V, V)
++
++    @inbounds for y in 0:(ly - 1), x in 0:(lx - 1)
++        src = site_index_2d(x, y, lx)
++        dst = site_index_2d(mod(x + 1, lx), y, lx)
++        phase = cis(qx * x + qy * y)
++        t_forward = -system.T[dst, src]
++        t_backward = -system.T[src, dst]
++        J[dst, src] += 1im * t_forward * phase
++        J[src, dst] += -1im * t_backward * phase
++    end
++
++    return J
++end
++
++"""
++    kinetic_operator_x(system::System)
++
++Construct the single-spin diamagnetic x-kinetic operator
++
++    K_x = - Σ_r t [ c†_{r+x} c_r + c†_r c_{r+x} ].
++"""
++function kinetic_operator_x(system::System)
++    lx, ly, lz = system.Ns
++    lz == 1 || error("kinetic_operator_x currently assumes a 2D lattice with Ns=(Lx,Ly,1)")
++    V = system.V
++    K = zeros(ComplexF64, V, V)
++
++    @inbounds for y in 0:(ly - 1), x in 0:(lx - 1)
++        src = site_index_2d(x, y, lx)
++        dst = site_index_2d(mod(x + 1, lx), y, lx)
++        K[dst, src] += system.T[dst, src]
++        K[src, dst] += system.T[src, dst]
++    end
++
++    return K
++end
++
++"""
++    measure_Bilinear(system::System, ρ::DensityMatrix, A::AbstractMatrix)
++
++Measure the canonical expectation value of a one-body bilinear operator
++
++    A = Σ_{ij} A_ij c†_i c_j
++
++from the one-body reduced density matrix.
++"""
++function measure_Bilinear(system::System, ρ::DensityMatrix, A::AbstractMatrix)
++    return sum(A .* transpose(ρ.ρ₁))
++end
++
++"""
++    measure_BilinearStaticResponse(system::System, ρ::DensityMatrix, spin::Int, A::AbstractMatrix; B=A)
++
++Measure the canonical static integrated response
++
++    ∫_0^β dτ ⟨ A(τ) B(0) ⟩
++
++for one-body bilinear operators in a fixed-spin sector.
++
++The formula is exact for the free-fermion problem defined by a given auxiliary-field
++configuration and uses the canonical single-particle occupancies plus their
++second-order number correlations in the eigenbasis of the single-particle propagator.
++"""
++function measure_BilinearStaticResponse(
++    system::System,
++    ρ::DensityMatrix,
++    spin::Int,
++    A::AbstractMatrix;
++    B::AbstractMatrix=A,
++)
++    N = system.N[spin]
++    t = ρ.t[]
++    λ = collect(@view ρ.λ[t])
++    P = @view ρ.P[:, t]
++    P⁻¹ = @view ρ.P⁻¹[t, :]
++
++    n = compute_occ_recursion(λ, N, isReal=(eltype(ρ.ρ₁) <: Real))
++    ninj = second_order_corr(λ, collect(n))
++
++    Ã = P⁻¹ * A * P
++    B̃ = P⁻¹ * B * P
++
++    β = system.β
++    Ns = length(λ)
++    response = zero(ComplexF64)
++
++    @inbounds for i in 1:Ns, k in 1:Ns
++        response += β * Ã[i, i] * B̃[k, k] * ninj[i, k]
++    end
++
++    @inbounds for i in 1:Ns
++        for j in 1:Ns
++            i == j && continue
++            Δlog = log(λ[j] / λ[i])
++            kernel = abs(Δlog) < 1e-12 ? β : β * expm1(Δlog) / Δlog
++            response += Ã[i, j] * B̃[j, i] * kernel * (n[i] - ninj[i, j])
++        end
++    end
++
++    return response
++end
++
++"""
++    measure_CurrentResponse(system::System, ρ₊::DensityMatrix, ρ₋::DensityMatrix; qx, qy)
++
++Measure the per-site static current response
++
++    Λ_xx(q,0) = Nsite^{-1} ∫_0^β dτ ⟨ J_x(q,τ) J_x(-q,0) ⟩
++
++including the spin-cross disconnected contribution.
++"""
++function measure_CurrentResponse(
++    system::System,
++    ρ₊::DensityMatrix,
++    ρ₋::DensityMatrix;
++    qx::Float64=0.0,
++    qy::Float64=0.0,
++)
++    Jq = current_operator_x(system, qx=qx, qy=qy)
++    Jm = current_operator_x(system, qx=-qx, qy=-qy)
++
++    up = measure_BilinearStaticResponse(system, ρ₊, 1, Jq, B=Jm)
++    dn = measure_BilinearStaticResponse(system, ρ₋, 2, Jq, B=Jm)
++    Jup_q = measure_Bilinear(system, ρ₊, Jq)
++    Jup_m = measure_Bilinear(system, ρ₊, Jm)
++    Jdn_q = measure_Bilinear(system, ρ₋, Jq)
++    Jdn_m = measure_Bilinear(system, ρ₋, Jm)
++    cross = system.β * (Jup_q * Jdn_m + Jdn_q * Jup_m)
++
++    return (up + dn + cross) / system.V
++end
++
++"""
++    measure_KxPerSite(system::System, ρ₊::DensityMatrix, ρ₋::DensityMatrix)
++
++Measure the per-site diamagnetic kinetic contribution
++
++    K_x / Nsite
++
++for both spin species together.
++"""
++function measure_KxPerSite(system::System, ρ₊::DensityMatrix, ρ₋::DensityMatrix)
++    Kx = kinetic_operator_x(system)
++    return (measure_Bilinear(system, ρ₊, Kx) + measure_Bilinear(system, ρ₋, Kx)) / system.V
++end
