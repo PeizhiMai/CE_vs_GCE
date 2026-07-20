@@ -7,11 +7,12 @@ WF=${PROJECT}/scripts/interacting_qmc_ed/ce_gce_eqtime_L6_obc_thermometry_202607
 MANIFEST=${MANIFEST:?MANIFEST must point to an L6 OBC CE manifest}
 RESUBMIT_SCRIPT=${RESUBMIT_SCRIPT:?RESUBMIT_SCRIPT must point to the Slurm wrapper}
 TASK_ID=${SLURM_ARRAY_TASK_ID:-${TASK_ID:-0}}
+PYTHON=${PYTHON:-/usr/bin/python3.11}
 LOG_DIR=${PROJECT}/logs
 mkdir -p "${LOG_DIR}"
 cd "${PROJECT}" || exit 2
 
-row=$(python3 - "${MANIFEST}" "${TASK_ID}" <<'PY'
+row=$("${PYTHON}" - "${MANIFEST}" "${TASK_ID}" <<'PY'
 import csv,sys
 rows=list(csv.DictReader(open(sys.argv[1]),delimiter="\t")); i=int(sys.argv[2])
 if not 0 <= i < len(rows): raise SystemExit(f"task {i} outside 0..{len(rows)-1}")
@@ -54,7 +55,7 @@ ACTUAL_SMOQY_COMMIT=$(git -C "${PROJECT}/external/SmoQyDQMC" rev-parse HEAD)
 [[ "${EXPECTED_SMOQY_VERSION}" == 2.0.12 ]] || { echo "manifest SmoQy version drift" >&2; exit 2; }
 [[ "${CANENS_BASE}" == 21b4f6815d0b836973064ff8401fb2ba9c23b802 ]] || { echo "CanEns base drift" >&2; exit 2; }
 
-is_positive=$(python3 - "${U}" <<'PY'
+is_positive=$("${PYTHON}" - "${U}" <<'PY'
 import sys; print("true" if float(sys.argv[1]) > 0 else "false")
 PY
 )
@@ -99,7 +100,7 @@ strict_final() {
     -o -name 'bkt_observables_qmc.tsv' -o -name 'equal_time_structure_factors_qmc.tsv' \
     -o -name 'equal_time_charge_spin_wedge_qmc.tsv' -o -name 'equal_time_neighbor_shells_qmc.tsv' \) | wc -l | tr -d ' ')
   [[ "${count}" -eq 0 ]] || return 1
-  python3 - "${OUTDIR}" "${EXPECTED_RANKS}" "${SITE_COUNT}" "${NN_COUNT}" "${NNN_COUNT}" <<'PY'
+  "${PYTHON}" - "${OUTDIR}" "${EXPECTED_RANKS}" "${SITE_COUNT}" "${NN_COUNT}" "${NNN_COUNT}" <<'PY'
 import csv,pathlib,sys
 root=pathlib.Path(sys.argv[1]); ranks=int(sys.argv[2]); sites_expected=int(sys.argv[3]); nn=int(sys.argv[4]); nnn=int(sys.argv[5])
 for name in ("equal_time_kinetic_per_site_qmc.tsv","equal_time_double_occupancy_per_site_qmc.tsv",
@@ -134,7 +135,7 @@ mpiexecjl --project="${JULIA_PROJECT}" -n "${RANKS}" "${JULIA_BIN}" --project="$
   --checkpoint-freq-hours="${CHECKPOINT_FREQ_HOURS}" --checkpoint-every-batches="${CHECKPOINT_EVERY_BATCHES}" \
   --checkpoint-warmup-chunk="${CHECKPOINT_WARMUP_CHUNK}" --runtime-limit-hours="${RUNTIME_LIMIT_HOURS}" \
   --checkpoint-keep=true --checkpoint-reset-accumulators=false --checkpoint-sync-timeout-seconds=900 \
-  --checkpoint-sync-poll-seconds=5 --seed="${BASE_SEED}" --python=python3 --output-dir="${OUTDIR}" "${extra[@]}" || rc=$?
+  --checkpoint-sync-poll-seconds=5 --seed="${BASE_SEED}" --python="${PYTHON}" --output-dir="${OUTDIR}" "${extra[@]}" || rc=$?
 
 if [[ "${rc}" -eq 0 ]]; then
   complete=$(find "${OUTDIR}/ranks" -mindepth 2 -maxdepth 2 -name checkpoint_complete.txt 2>/dev/null | wc -l | tr -d ' ')
@@ -149,7 +150,7 @@ checkpoint_count=$(find "${OUTDIR}/ranks" -mindepth 2 -maxdepth 2 -name checkpoi
 status_count=$(find "${OUTDIR}/ranks" -mindepth 2 -maxdepth 2 -name checkpoint.jls.status 2>/dev/null | wc -l | tr -d ' ')
 fresh=false
 if [[ "${rc}" -eq 13 && "${checkpoint_count}" -eq "${EXPECTED_RANKS}" && "${status_count}" -eq "${EXPECTED_RANKS}" ]]; then
-  if python3 - "${OUTDIR}" "${EXPECTED_RANKS}" "${START}" <<'PY'
+  if "${PYTHON}" - "${OUTDIR}" "${EXPECTED_RANKS}" "${START}" <<'PY'
 import pathlib,sys
 root=pathlib.Path(sys.argv[1]); n=int(sys.argv[2]); started=float(sys.argv[3])
 cp=sorted(root.glob("ranks/rank_*/checkpoint.jls")); st=sorted(root.glob("ranks/rank_*/checkpoint.jls.status"))

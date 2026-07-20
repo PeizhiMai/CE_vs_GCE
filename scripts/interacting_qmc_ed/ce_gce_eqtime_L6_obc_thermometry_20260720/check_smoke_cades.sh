@@ -3,6 +3,7 @@
 set -euo pipefail
 PROJECT=${PROJECT:-/home/9pm/nUHubbard_obc_dev}
 WF=${PROJECT}/scripts/interacting_qmc_ed/ce_gce_eqtime_L6_obc_thermometry_20260720
+PYTHON=${PYTHON:-/usr/bin/python3.11}
 ROOT=/home/9pm/nUHubbard_obc_runs/ce_gce_eqtime_L6_obc_thermometry_20260720_smoke
 PRIMARY=(equal_time_kinetic_per_site_qmc.tsv equal_time_double_occupancy_per_site_qmc.tsv equal_time_nn_spin_qmc.tsv equal_time_nn_connected_charge_qmc.tsv)
 ce_ok=0
@@ -12,7 +13,7 @@ for u in Um3 Up3; do
   tables=0; for f in "${PRIMARY[@]}"; do [[ -s "${d}/${f}" ]] && tables=$((tables+1)); done
   valid=no
   if [[ -f "${d}/obc_thermometry_complete.txt" && ${ranks} -eq 2 && ${sites} -eq 2 && ${tables} -eq 4 ]] && \
-     python3 - "${d}" <<'PY'
+     "${PYTHON}" - "${d}" <<'PY'
 import csv,pathlib,sys
 root=pathlib.Path(sys.argv[1])
 for name in ("equal_time_kinetic_per_site_qmc.tsv","equal_time_double_occupancy_per_site_qmc.tsv","equal_time_nn_spin_qmc.tsv","equal_time_nn_connected_charge_qmc.tsv"):
@@ -30,7 +31,7 @@ for fam in attractive spinHS; do
   ranks=0; valid=no
   if [[ ${#complete[@]} -eq 1 ]]; then
     ranks=$(find "${complete[0]}" -maxdepth 1 -name 'simulation_info_sID-*_pID-*.toml' | wc -l | tr -d ' ')
-    if [[ -s "${complete[0]}/global_stats.csv" && ${ranks} -eq 2 ]] && python3 - "${complete[0]}" <<'PY'
+    if [[ -s "${complete[0]}/global_stats.csv" && ${ranks} -eq 2 ]] && "${PYTHON}" - "${complete[0]}" <<'PY'
 import pathlib,sys,tomllib
 root=pathlib.Path(sys.argv[1]); paths=sorted(root.glob("simulation_info_sID-*_pID-*.toml")); assert len(paths)==2
 for path in paths:

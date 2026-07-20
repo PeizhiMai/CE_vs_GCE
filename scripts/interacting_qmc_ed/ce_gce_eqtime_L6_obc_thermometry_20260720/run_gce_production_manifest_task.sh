@@ -8,10 +8,11 @@ MANIFEST=${MANIFEST:?MANIFEST must point to a confirmed OBC GCE production manif
 GCE_FAMILY=${GCE_FAMILY:?GCE_FAMILY must be attractive or spinHS}
 RESUBMIT_SCRIPT=${RESUBMIT_SCRIPT:?RESUBMIT_SCRIPT is required}
 TASK_ID=${SLURM_ARRAY_TASK_ID:-${TASK_ID:-0}}
+PYTHON=${PYTHON:-/usr/bin/python3.11}
 cd "${PROJECT}" || exit 2
 mkdir -p "${PROJECT}/logs"
 
-row=$(python3 - "${MANIFEST}" "${TASK_ID}" <<'PY'
+row=$("${PYTHON}" - "${MANIFEST}" "${TASK_ID}" <<'PY'
 import csv,sys
 rows=list(csv.DictReader(open(sys.argv[1]),delimiter="\t")); i=int(sys.argv[2])
 if not 0 <= i < len(rows): raise SystemExit(f"task {i} outside 0..{len(rows)-1}")
@@ -46,12 +47,12 @@ ACTUAL_PROJECT_COMMIT=$(git rev-parse HEAD); ACTUAL_SMOQY_COMMIT=$(git -C "${PRO
 [[ "${ACTUAL_PROJECT_COMMIT}" == "${EXPECTED_PROJECT_COMMIT}" && "${ACTUAL_SMOQY_COMMIT}" == "${EXPECTED_SMOQY_COMMIT}" && "${EXPECTED_SMOQY_VERSION}" == 2.0.12 ]] || { echo "project/dependency drift" >&2; exit 2; }
 case "${GCE_FAMILY}" in
  attractive)
-  python3 - "${U}" <<'PY' || exit $?
+  "${PYTHON}" - "${U}" <<'PY' || exit $?
 import sys; assert float(sys.argv[1]) < 0
 PY
   DRIVER=${PROJECT}/scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard_checkpoint.jl ;;
  spinHS)
-  python3 - "${U}" <<'PY' || exit $?
+  "${PYTHON}" - "${U}" <<'PY' || exit $?
 import sys; assert float(sys.argv[1]) > 0
 PY
   DRIVER=${PROJECT}/scripts/interacting_qmc_ed/run_smoqydqmc_hubbard_spin_hs_checkpoint.jl ;;
@@ -106,7 +107,7 @@ mpiexecjl --project="${JULIA_PROJECT}" -n "${RANKS}" "${JULIA_BIN}" --project="$
 
 complete=$(complete_dir)
 if [[ "${rc}" -eq 0 && -n "${complete}" ]]; then
-  python3 - "${complete}" "${NTOT_TARGET}" "${DENSITY_TOL}" "${OUT_PARENT}" "${RANKS}" <<'PY' || exit $?
+  "${PYTHON}" - "${complete}" "${NTOT_TARGET}" "${DENSITY_TOL}" "${OUT_PARENT}" "${RANKS}" <<'PY' || exit $?
 import csv,pathlib,sys,tomllib
 root=pathlib.Path(sys.argv[1]); target=int(sys.argv[2]); tol=float(sys.argv[3]); parent=pathlib.Path(sys.argv[4]); ranks=int(sys.argv[5])
 summary=list(csv.DictReader(open(root/"equal_time_observables_obc_qmc.tsv"),delimiter="\t"))[0]

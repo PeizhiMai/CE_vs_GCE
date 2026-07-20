@@ -8,10 +8,11 @@ MANIFEST=${MANIFEST:?MANIFEST must point to an OBC GCE probe manifest}
 GCE_FAMILY=${GCE_FAMILY:?GCE_FAMILY must be attractive or spinHS}
 RESUBMIT_SCRIPT=${RESUBMIT_SCRIPT:?RESUBMIT_SCRIPT is required}
 TASK_ID=${SLURM_ARRAY_TASK_ID:-${TASK_ID:-0}}
+PYTHON=${PYTHON:-/usr/bin/python3.11}
 cd "${PROJECT}" || exit 2
 mkdir -p "${PROJECT}/logs"
 
-row=$(python3 - "${MANIFEST}" "${TASK_ID}" <<'PY'
+row=$("${PYTHON}" - "${MANIFEST}" "${TASK_ID}" <<'PY'
 import csv,sys
 rows=list(csv.DictReader(open(sys.argv[1]),delimiter="\t")); i=int(sys.argv[2])
 if not 0 <= i < len(rows): raise SystemExit(f"task {i} outside 0..{len(rows)-1}")
@@ -48,12 +49,12 @@ ACTUAL_SMOQY_COMMIT=$(git -C "${PROJECT}/external/SmoQyDQMC" rev-parse HEAD)
 [[ "${EXPECTED_SMOQY_VERSION}" == 2.0.12 ]] || exit 2
 case "${GCE_FAMILY}" in
   attractive)
-    python3 - "${U}" <<'PY' || exit $?
+    "${PYTHON}" - "${U}" <<'PY' || exit $?
 import sys; assert float(sys.argv[1]) < 0
 PY
     DRIVER=${PROJECT}/scripts/interacting_qmc_ed/run_smoqydqmc_attractive_hubbard_checkpoint.jl ;;
   spinHS)
-    python3 - "${U}" <<'PY' || exit $?
+    "${PYTHON}" - "${U}" <<'PY' || exit $?
 import sys; assert float(sys.argv[1]) > 0
 PY
     DRIVER=${PROJECT}/scripts/interacting_qmc_ed/run_smoqydqmc_hubbard_spin_hs_checkpoint.jl ;;
@@ -89,7 +90,7 @@ strict_final() {
   [[ -s "${complete}/global_stats.csv" ]] || return 1
   count=$(find "${complete}" -maxdepth 1 -name 'simulation_info_sID-*_pID-*.toml' | wc -l | tr -d ' ')
   [[ "${count}" -eq "${RANKS}" ]] || return 1
-  python3 - "${complete}" "${RANKS}" "${SITE_COUNT}" "${NN_COUNT}" "${NNN_COUNT}" <<'PY'
+  "${PYTHON}" - "${complete}" "${RANKS}" "${SITE_COUNT}" "${NN_COUNT}" "${NNN_COUNT}" <<'PY'
 import pathlib,sys,tomllib
 root=pathlib.Path(sys.argv[1]); ranks=int(sys.argv[2]); site=int(sys.argv[3]); nn=int(sys.argv[4]); nnn=int(sys.argv[5])
 paths=sorted(root.glob("simulation_info_sID-*_pID-*.toml")); assert len(paths)==ranks
@@ -104,7 +105,7 @@ PY
 write_achieved() {
   local complete
   complete=$(complete_dir)
-  python3 - "${complete}/global_stats.csv" "${NTOT_TARGET}" "${SITE_COUNT}" "${OUT_PARENT}/probe_achieved_density.tsv" <<'PY'
+  "${PYTHON}" - "${complete}/global_stats.csv" "${NTOT_TARGET}" "${SITE_COUNT}" "${OUT_PARENT}/probe_achieved_density.tsv" <<'PY'
 import csv,pathlib,sys
 path=pathlib.Path(sys.argv[1]); target=int(sys.argv[2]); sites=int(sys.argv[3]); out=pathlib.Path(sys.argv[4])
 stats={}

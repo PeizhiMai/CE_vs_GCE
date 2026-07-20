@@ -10,6 +10,8 @@ production tree.
 - SmoQyDQMC: official v2.0.12 with pinned OBC fork commit
   `c5f0c81bc98029bae585e0cb283428e293553999`.
 - Julia 1.12.1 and pinned `OpenMPI_jll`.
+- CADES wrapper validation is pinned to `/usr/bin/python3.11` (rather than the
+  login-node `python3`, which is Python 3.6 and lacks `tomllib`).
 - CADES code: `/home/9pm/nUHubbard_obc_dev`.
 - CADES data: `/home/9pm/nUHubbard_obc_runs`.
 - Every run root contains `_obc_`; every CE/GCE invocation explicitly uses

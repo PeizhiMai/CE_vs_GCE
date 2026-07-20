@@ -103,14 +103,17 @@ def main()->None:
     for beta,n in ((2.0,2),(5.0,4),(10.0,6)):
         mu=exact.exact_gce_mu(g3,beta,n);summary=exact.grand_canonical_summary(g3,beta,mu);check(abs(float(summary["N_mean"])-n)<2e-9,f"exact OBC GCE mu solve hits N={n} at beta={beta}")
 
-    exact_snapshot=HERE/"status_source"/"exact_u0_obc"/"exact_u0_L6_obc_snapshot.tsv"
+    exact_snapshot=HERE/"status_source"/"exact_u0_L6_obc_snapshot.tsv"
     if exact_snapshot.is_file():
         rows=read(exact_snapshot);check(len(rows)==80,"exact U=0 snapshot has 80 ensemble rows")
         check(all(row["boundary"]=="open" and row["final"]=="1" for row in rows),"exact U=0 snapshot is final OBC data")
 
-    runner_text="\n".join((HERE/name).read_text() for name in ("run_ce_manifest_task.sh","run_gce_mu_manifest_task.sh","run_gce_production_manifest_task.sh"))
+    runner_names=("run_ce_manifest_task.sh","run_gce_mu_manifest_task.sh","run_gce_production_manifest_task.sh")
+    runner_sources=[(HERE/name).read_text() for name in runner_names]
+    runner_text="\n".join(runner_sources)
     check(runner_text.count("--boundary=open")>=3,"all CE/GCE launchers explicitly request OBC")
     check("checkpoint-reset-accumulators=false" in runner_text and "CHECKPOINT_RESET_ACCUMULATORS=false" in runner_text,"checkpoint accumulators are never reset")
+    check(all("PYTHON=${PYTHON:-/usr/bin/python3.11}" in text for text in runner_sources),"all CADES launchers pin Python 3.11 metadata validation")
     analysis=(HERE/"analyze_l6_obc_thermometry.py").read_text()
     check("(tgce - tce) / tce" in analysis and "NaNs make matplotlib break the line" in analysis,"thermometry uses requested bias and broken actual-point curves")
     report={"project_commit":commit,"grid":192,"interacting":152,"exact_conditions":40,"geometry":{"sites":36,"nn":60,"nnn":50},"smoqydqmc_commit":EXPECTED_SMOQ,"status":"pass"}
